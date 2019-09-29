@@ -17,10 +17,14 @@ import torch
 import torchvision.models as  models
 import os.path as osp
 
-global PAD_id = 0
-global BOS_id = 1
-global UNK_id = 2
-global EOS_id = 3
+global PAD_id
+PAD_id = 0
+global BOS_id
+BOS_id = 1
+global UNK_id
+UNK_id = 2
+global EOS_id
+EOS_id = 3
 
 def load_statistics(refer):
     print('dataset [%s_%s] contains: ' % (dataset, splitBy))
@@ -130,7 +134,7 @@ if __name__ == '__main__':
     res50_C4 = Resnet_C4(resnet_50)
 
     #Setting variables for data loading
-    data_root = '../data'  # contains refclef, refcoco, refcoco+, refcocog and images
+    data_root = '../../data'  # contains refclef, refcoco, refcoco+, refcocog and images
     dataset = 'refcoco+'
     splitBy = 'unc'
     refer = REFER(data_root, dataset, splitBy)
@@ -152,7 +156,7 @@ if __name__ == '__main__':
 
 
     bounded_outputs = get_C4_vec(res50_C4,bounded_image_list)
-    print bounded_outputs[0].size()
+    print(bounded_outputs[0].size())
     show_image(bounded_image_list)
 
     vocab, freq = build_vocab(refs_dict)
