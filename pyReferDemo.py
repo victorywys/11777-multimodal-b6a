@@ -4,13 +4,15 @@ Created on Tue Sep 10 01:06:14 2019
 
 @author: pvsha
 """
+import matplotlib
+matplotlib.use('Agg')
 
 from refer import REFER
 import numpy as np
 import skimage.io as io
 import matplotlib.pyplot as plt
 
-data_root = '.\data'  # contains refclef, refcoco, refcoco+, refcocog and images
+data_root = '../data'  # contains refclef, refcoco, refcoco+, refcocog and images
 dataset = 'refcoco+'
 splitBy = 'unc'
 refer = REFER(data_root, dataset, splitBy)
@@ -32,12 +34,12 @@ elif dataset == 'refcoco+':
     splits = ['train', 'val', 'test']
 elif dataset == 'refcocog':
     splits = ['train', 'val']  # we don't have test split for refcocog right now.
-    
+
 for split in splits:
     ref_ids = refer.getRefIds(split=split)
     print('%s refs are in split [%s].' % (len(ref_ids), split))
-    
-    
+
+
 ref_ids = refer.getRefIds()
 ref_id = ref_ids[np.random.randint(0, len(ref_ids))]
 ref = refer.Refs[ref_id]
