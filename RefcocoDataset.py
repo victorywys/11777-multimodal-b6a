@@ -1,4 +1,4 @@
-import torch.utils.data.Dataset as Dataset
+from torch.utils.data.dataset import Dataset
 
 class RefcocoDataset(Dataset):
     def __init__(self, img, label):
