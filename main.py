@@ -21,23 +21,6 @@ from RefcocoDataset import RefcocoDataset as RefD
 import torch.utils.data as Data
 from model import Net
 
-global PAD_id
-PAD_id = 0
-global BOS_id
-BOS_id = 1
-global UNK_id
-UNK_id = 2
-global EOS_id
-EOS_id = 3
-global BATCH_SIZE
-BATCH_SIZE = 32
-global EPOCH_NUM
-EPOCH_NUM = 10
-global MAX_LEN
-MAX_LEN = 25
-global LEARNING_RATE
-LEARNING_RATE = 1e-2
-
 def load_statistics(refer):
     print('dataset [%s_%s] contains: ' % (dataset, splitBy))
     ref_ids = refer.getRefIds()
@@ -147,6 +130,7 @@ def build_vocab(refs, min_occur = 5):
     return map(lambda x:x[0], l), map(lambda x:x[1], l)
 
 if __name__ == '__main__':
+    device = torch.device("cuda:%d" % gc.cuda if torch.cuda.is_available() else "cpu")
     resnet_50 = models.resnet50(pretrained=True)
     res50_C4 = Resnet_C4(resnet_50)
 
@@ -200,11 +184,11 @@ if __name__ == '__main__':
     labels['test'] = []
     labels['valid'] = []
 
-    sen2id = lambda x: w2id[x] if w2id.has_key(x) else UNK_id
+    sen2id = lambda x: w2id[x] if w2id.has_key(x) else gc.UNK_id
     for key in ['train', 'test', 'val']:
         labels[key] = []
         for r in refs_dict[key][:num[key]]:
-            labels[key].append(map(sen2id, r['sentences'][0]['tokens']) + [EOS_id])
+            labels[key].append(map(sen2id, r['sentences'][0]['tokens']) + [gc.EOS_id])
 
     feed_data = dict()
     for key in ['train', 'test', 'val']:
@@ -212,19 +196,19 @@ if __name__ == '__main__':
 
     train_loader = Data.DataLoader(
             dataset=feed_data['train'],
-            batch_size=BATCH_SIZE,
+            batch_size=gc.batch_size,
             shuffle=True,
             num_workers=1,
         )
     test_loader = Data.DataLoader(
             dataset=feed_data['test'],
-            batch_size=BATCH_SIZE,
+            batch_size=gc.batch_size,
             shuffle=False,
             num_workers=1,
         )
     val_loader = Data.DataLoader(
             dataset=feed_data['val'],
-            batch_size=BATCH_SIZE,
+            batch_size=gc.batch_size,
             shuffle=False,
             num_workers=1,
         )
@@ -233,10 +217,10 @@ if __name__ == '__main__':
     print net
 
     running_loss = 0.0
-    criterion = nn.CrossEntropyLoss(ignore_index=UNK_id)
-    optimizer = optim.Adam(net.parameters(), lr=LEARNING_RATE)
+    criterion = nn.CrossEntropyLoss(ignore_index=gc.UNK_id)
+    optimizer = optim.Adam(net.parameters(), lr=gc.learning_rate)
 
-    for epoch in range(EPOCH_NUM):
+    for epoch in range(gc.epoch_num):
         print("Training epoch %d" % epoch)
         for i, data in enumerate(train_loader):
             img, label = data
@@ -244,8 +228,8 @@ if __name__ == '__main__':
             output_flat = []
             label_flat = []
             for j in range(len(label)):
-                output_flat += outputs[j][:min(len(label[j]), MAX_LEN)]
-                label_flat += label[j][:min(len(label[j]), MAX_LEN)]
+                output_flat += outputs[j][:min(len(label[j]), gc.max_len)]
+                label_flat += label[j][:min(len(label[j]), gc.max_len)]
             loss = criterion(outputs_flat, label_flat)
             loss.backward()
             optimizer.step()
@@ -262,7 +246,7 @@ if __name__ == '__main__':
                 output_flat = []
                 label_flat = []
                 for j in range(len(label)):
-                    for k in range(min(len(label[j]), MAX_LEN)):
+                    for k in range(min(len(label[j]), gc.max_len)):
                         log_per += torch.log(outputs[j][k][label[j][k]])
                 log_per /= len(label)
                 print('Epoch %d: Perplexity on test: %.2f' % (epoch + 1, 2**(-log_per)))
@@ -274,7 +258,7 @@ if __name__ == '__main__':
                 output_flat = []
                 label_flat = []
                 for j in range(len(label)):
-                    for k in range(min(len(label[j]), MAX_LEN)):
+                    for k in range(min(len(label[j]), gc.max_len)):
                         log_per += torch.log(outputs[j][k][label[j][k]])
                 log_per /= len(label)
                 print('Epoch %d: Perplexity on valid: %.2f' % (epoch + 1, 2**(-log_per)))
