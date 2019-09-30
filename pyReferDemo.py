@@ -5,7 +5,6 @@ Created on Tue Sep 10 01:06:14 2019
 @author: pvsha
 """
 import matplotlib
-matplotlib.use('Agg')
 
 from refer import REFER
 import numpy as np

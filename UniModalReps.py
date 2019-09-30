@@ -14,7 +14,7 @@ import torchvision.models as  models
 import os.path as osp
 
 def load_statistics(refer):
-    print('dataset [%s_%s] contains: ' % (dataset, splitBy))
+#     print('dataset [%s_%s] contains: ' % (dataset, splitBy))
     ref_ids = refer.getRefIds()
     image_ids = refer.getImgIds()
     print('%s expressions for %s refs in %s images.' % (len(refer.Sents), len(ref_ids), len(image_ids)))
@@ -32,7 +32,7 @@ def get_refIds(refer,split):
     ref_ids = refer.getRefIds(split=split)
     return ref_ids
 
-def get_refBox(refId):
+def get_refBox(refer, refId):
     RefBox = refer.getRefBox(refId)
     return RefBox
 
@@ -72,19 +72,17 @@ def get_refs_id_dict(refer, splits):
 def get_bounded_image(refer,ref_list,loaded_img_list):
     bounded_img_list = []
     for i in range(len(loaded_img_list)):
-        print(i)
         I = io.imread(osp.join(refer.IMAGE_DIR, loaded_img_list[i][0]['file_name']))
-        RefBox = get_refBox(ref_list[i])
+        RefBox = get_refBox(refer, ref_list[i])
         bounded_img_list.append(I[int(RefBox[1]):int(RefBox[1]+RefBox[3]),int(RefBox[0]):int(RefBox[0]+RefBox[2])])
     return bounded_img_list
 
 def get_C4_vec(res50_C4,bounded_image_list):
     bounded_outputs = []
-    for i in range(len(bounded_image_list)):
-        cropped_tensor = torch.from_numpy(bounded_image_list[i])
-        cropped_tensor = cropped_tensor.reshape(1,cropped_tensor.shape[2],cropped_tensor.shape[0],cropped_tensor.shape[1])
+    for cropped_tensor in bounded_image_list:
+        cropped_tensor = cropped_tensor.unsqueeze(0)
         cropped_tensor = cropped_tensor.type(dtype=torch.FloatTensor)
-        bounded_outputs.append(res50_C4(cropped_tensor))
+        bounded_outputs.append(res50_C4(cropped_tensor).cpu().numpy())
     return bounded_outputs
         
 
