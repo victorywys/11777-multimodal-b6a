@@ -13,9 +13,13 @@ import numpy as np
 import skimage.io as io
 import matplotlib.pyplot as plt
 import torch.nn as nn
+import torch.optim as optim
 import torch
 import torchvision.models as  models
 import os.path as osp
+from RefcocoDataset import RefcocoDataset as RefD
+import torch.utils.data as Data
+from model import Net
 
 global PAD_id
 PAD_id = 0
@@ -25,6 +29,14 @@ global UNK_id
 UNK_id = 2
 global EOS_id
 EOS_id = 3
+global BATCH_SIZE
+BATCH_SIZE = 32
+global EPOCH_NUM
+EPOCH_NUM = 10
+global MAX_LEN
+MAX_LEN = 25
+global LEARNING_RATE
+LEARNING_RATE = 1e-2
 
 def load_statistics(refer):
     print('dataset [%s_%s] contains: ' % (dataset, splitBy))
@@ -88,6 +100,7 @@ def get_bounded_image(refer,ref_list,loaded_img_list):
         I = io.imread(osp.join(refer.IMAGE_DIR, loaded_img_list[i][0]['file_name']))
         RefBox = get_refBox(ref_list[i])
         bounded_img_list.append(I[int(RefBox[1]):int(RefBox[1]+RefBox[3]),int(RefBox[0]):int(RefBox[0]+RefBox[2])])
+    print("bounded_image get")
     return bounded_img_list
 
 def get_C4_vec(res50_C4,bounded_image_list):
@@ -97,8 +110,8 @@ def get_C4_vec(res50_C4,bounded_image_list):
         cropped_tensor = cropped_tensor.reshape(1,cropped_tensor.shape[2],cropped_tensor.shape[0],cropped_tensor.shape[1])
         cropped_tensor = cropped_tensor.type(dtype=torch.FloatTensor)
         bounded_outputs.append(res50_C4(cropped_tensor))
+    print("C4_vec")
     return bounded_outputs
-
 
 class Resnet_C4(nn.Module):
     def __init__(self, original_model):
@@ -119,14 +132,18 @@ class Resnet_C3(nn.Module):
 def build_vocab(refs, min_occur = 5):
     d = dict()
     tr = refs['train']
-    for ref in res_small:
-        for w in ref.strip().split():
-            if d.has_key(w):
-                d[w] += 1
-            else:
-                d[w] = 1
+    print("start building vocabulary...")
+    for i, ref in enumerate(tr):
+        if i % 10000 == 0:
+            print("processing image %d" % i)
+        for sen in ref['sentences']:
+            for w in sen['tokens']:
+                if d.has_key(w):
+                    d[w] += 1
+                else:
+                    d[w] = 1
     l = zip(d.keys(), d.values())
-    l = filter(lambda x: x[1] > min_occur , sorted(l, lambda x, y: 1 if x[1] > y[1] else -1))
+    l = filter(lambda x: x[1] > min_occur , sorted(l, lambda x, y: 1 if x[1] < y[1] else -1))
     return map(lambda x:x[0], l), map(lambda x:x[1], l)
 
 if __name__ == '__main__':
@@ -134,7 +151,7 @@ if __name__ == '__main__':
     res50_C4 = Resnet_C4(resnet_50)
 
     #Setting variables for data loading
-    data_root = '../../data'  # contains refclef, refcoco, refcoco+, refcocog and images
+    data_root = '../data'  # contains refclef, refcoco, refcoco+, refcocog and images
     dataset = 'refcoco+'
     splitBy = 'unc'
     refer = REFER(data_root, dataset, splitBy)
@@ -147,19 +164,31 @@ if __name__ == '__main__':
 
     refs_small = refs_dict['train'][:10]
     ref_id_small = ref_ids_dict['train'][:10]
+    print(len(refs_dict['train']))
+    print(len(refs_dict['test']))
+    print(len(refs_dict['val']))
 
     for i in refs_small:
         show_image_annoted(refer,i)
 
-    img_list = load_images(refer,refs_small)
-    bounded_image_list = get_bounded_image(refer,ref_id_small,img_list)
+    img_list = dict()
+    bounded_img_list = dict()
+    bounded_outputs = dict()
 
-
-    bounded_outputs = get_C4_vec(res50_C4,bounded_image_list)
-    print(bounded_outputs[0].size())
-    show_image(bounded_image_list)
+    num = {'train': 50, 'test': 10, 'val':10}
+    for key in ['train', 'test', 'val']:
+        img_list[key] = load_images(refer,refs_dict[key][:num[key]])
+    #    bounded_img_list[key] = get_bounded_image(refer, ref_ids_dict[key][:num[key]], img_list[key])
+    #    bounded_outputs[key] = get_C4_vec(res50_C4,bounded_img_list[key])
+#    print(len(bounded_outputs['train']))
+#    print(bounded_outputs['train'][0].size())
+#    print(bounded_outputs['train'][0])
 
     vocab, freq = build_vocab(refs_dict)
+    fout = open("vocab.txt", 'w')
+    for u, v in zip(vocab, freq):
+        fout.write("%s\t%d\n" % (u, v))
+
     vocab = ['_PAD', '_BOS', '_UNK', '_EOS'] + vocab
 
     w2id = dict()
@@ -172,10 +201,81 @@ if __name__ == '__main__':
     labels['valid'] = []
 
     sen2id = lambda x: w2id[x] if w2id.has_key(x) else UNK_id
-    for r in refs_dict['train']:
-        labels['train'].append(map(sen2id, r.strip().split()))
-    for r in refs_dict['test']:
-        labels['test'].append(map(sen2id, r.strip().split()))
-    for r in refs_dict['valid']:
-        labels['valid'].append(map(sen2id, r.strip().split()))
+    for key in ['train', 'test', 'val']:
+        labels[key] = []
+        for r in refs_dict[key][:num[key]]:
+            labels[key].append(map(sen2id, r['sentences'][0]['tokens']) + [EOS_id])
+
+    feed_data = dict()
+    for key in ['train', 'test', 'val']:
+        feed_data[key] = RefD(bounded_outputs[key], labels[key])
+
+    train_loader = Data.DataLoader(
+            dataset=feed_data['train'],
+            batch_size=BATCH_SIZE,
+            shuffle=True,
+            num_workers=1,
+        )
+    test_loader = Data.DataLoader(
+            dataset=feed_data['test'],
+            batch_size=BATCH_SIZE,
+            shuffle=False,
+            num_workers=1,
+        )
+    val_loader = Data.DataLoader(
+            dataset=feed_data['val'],
+            batch_size=BATCH_SIZE,
+            shuffle=False,
+            num_workers=1,
+        )
+
+    net = Net()
+    print net
+
+    running_loss = 0.0
+    criterion = nn.CrossEntropyLoss(ignore_index=UNK_id)
+    optimizer = optim.Adam(net.parameters(), lr=LEARNING_RATE)
+
+    for epoch in range(EPOCH_NUM):
+        print("Training epoch %d" % epoch)
+        for i, data in enumerate(train_loader):
+            img, label = data
+            outputs = net(img)
+            output_flat = []
+            label_flat = []
+            for j in range(len(label)):
+                output_flat += outputs[j][:min(len(label[j]), MAX_LEN)]
+                label_flat += label[j][:min(len(label[j]), MAX_LEN)]
+            loss = criterion(outputs_flat, label_flat)
+            loss.backward()
+            optimizer.step()
+            running_loss += loss.item()
+            if i % 50 == 49:
+                print('[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, running_loss / 50))
+                running_loss = 0.0
+
+        with torch.no_grad():
+            log_per = 0.0
+            for i, data in enumerate(test_loader):
+                img, label = data
+                outputs = net(img)
+                output_flat = []
+                label_flat = []
+                for j in range(len(label)):
+                    for k in range(min(len(label[j]), MAX_LEN)):
+                        log_per += torch.log(outputs[j][k][label[j][k]])
+                log_per /= len(label)
+                print('Epoch %d: Perplexity on test: %.2f' % (epoch + 1, 2**(-log_per)))
+
+            log_per = 0.0
+            for i, data in enumerate(val_loader):
+                img, label = data
+                outputs = net(img)
+                output_flat = []
+                label_flat = []
+                for j in range(len(label)):
+                    for k in range(min(len(label[j]), MAX_LEN)):
+                        log_per += torch.log(outputs[j][k][label[j][k]])
+                log_per /= len(label)
+                print('Epoch %d: Perplexity on valid: %.2f' % (epoch + 1, 2**(-log_per)))
 
