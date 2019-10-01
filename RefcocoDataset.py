@@ -1,4 +1,6 @@
-import torch.utils.data.Dataset as Dataset
+import torch
+from torch.utils.data import Dataset
+from const import global_consts as gc
 
 class RefcocoDataset(Dataset):
     def __init__(self, img, label):
@@ -14,4 +16,11 @@ class RefcocoDataset(Dataset):
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
-        return self.input[idx], self.output[idx]
+        label = torch.tensor(self.output[idx])
+        if len(self.output[idx]) >= gc.max_len:
+            label = torch.tensor(self.output[idx][:gc.max_len])
+            length = gc.max_len
+        else:
+            label = torch.cat([torch.tensor(self.output[idx]), torch.zeros(gc.max_len - len(self.output[idx]), dtype=torch.long)], 0)
+            length = len(self.output[idx])
+        return self.input[idx], label, length

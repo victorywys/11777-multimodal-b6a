@@ -1,0 +1,345 @@
+loading dataset refcoco+ into memory...
+creating index...
+index created.
+DONE (t=13.17s)
+dataset [refcoco+_unc] contains: 
+141564 expressions for 49856 refs in 19992 images.
+42278
+3773
+3805
+1. navy blue shirt
+2. woman back in blue
+3. blue shirt
+1. gray shirt wearing glasses
+2. lady with glasses
+3. woman with gray shirt standing next to man
+1. standing with racket
+2. woman standing
+3. holding raquet
+1. woman sitting with leg extended
+2. ditting darker hair
+1. child with case on head
+2. holding a green object
+3. hand of person with red shirt
+1. guy in brown shirt
+2. man in brown
+3. man wearing long sleeves
+1. urinal closest to the white pipe
+1. pisser far rat
+1. vase holding tallest flower
+2. the vase with the tallest flower
+3. no 3
+1. vase of flower drooping
+2. vase with wilted flower
+3. vase of the flower tilting over
+^CTraceback (most recent call last):
+  File "main.py", line 165, in <module>
+    bounded_img_list[key] = get_bounded_image(refer, ref_ids_dict[key], img_list[key])
+  File "main.py", line 84, in get_bounded_image
+    I = io.imread(osp.join(refer.IMAGE_DIR, loaded_img_list[i][0]['file_name']))
+  File "/home/ubuntu/anaconda3/envs/pytorch_p27/lib/python2.7/site-packages/skimage/io/_io.py", line 61, in imread
+    img = call_plugin('imread', fname, plugin=plugin, **plugin_args)
+  File "/home/ubuntu/anaconda3/envs/pytorch_p27/lib/python2.7/site-packages/skimage/io/manage_plugins.py", line 211, in call_plugin
+    return func(*args, **kwargs)
+  File "/home/ubuntu/anaconda3/envs/pytorch_p27/lib/python2.7/site-packages/skimage/io/_plugins/pil_plugin.py", line 37, in imread
+    return pil_to_ndarray(im, dtype=dtype, img_num=img_num)
+  File "/home/ubuntu/anaconda3/envs/pytorch_p27/lib/python2.7/site-packages/skimage/io/_plugins/pil_plugin.py", line 53, in pil_to_ndarray
+    im.getdata()[0]
+  File "/home/ubuntu/anaconda3/envs/pytorch_p27/lib/python2.7/site-packages/PIL/Image.py", line 1270, in getdata
+    self.load()
+  File "/home/ubuntu/anaconda3/envs/pytorch_p27/lib/python2.7/site-packages/PIL/ImageFile.py", line 241, in load
+    n, err_code = decoder.decode(b)
+KeyboardInterrupt
+loading dataset refcoco+ into memory...
+creating index...
+index created.
+DONE (t=12.93s)
+dataset [refcoco+_unc] contains: 
+141564 expressions for 49856 refs in 19992 images.
+42278
+3773
+3805
+1. navy blue shirt
+2. woman back in blue
+3. blue shirt
+1. gray shirt wearing glasses
+2. lady with glasses
+3. woman with gray shirt standing next to man
+1. standing with racket
+2. woman standing
+3. holding raquet
+1. woman sitting with leg extended
+2. ditting darker hair
+1. child with case on head
+2. holding a green object
+3. hand of person with red shirt
+1. guy in brown shirt
+2. man in brown
+3. man wearing long sleeves
+1. urinal closest to the white pipe
+1. pisser far rat
+1. vase holding tallest flower
+2. the vase with the tallest flower
+3. no 3
+1. vase of flower drooping
+2. vase with wilted flower
+3. vase of the flower tilting over
+42278 images to load
+working on image 0
+working on image 100
+working on image 200
+working on image 300
+working on image 400
+working on image 500
+working on image 600
+working on image 700
+working on image 800
+working on image 900
+working on image 1000
+working on image 1100
+working on image 1200
+working on image 1300
+working on image 1400
+working on image 1500
+working on image 1600
+working on image 1700
+working on image 1800
+working on image 1900
+working on image 2000
+working on image 2100
+working on image 2200
+working on image 2300
+working on image 2400
+working on image 2500
+working on image 2600
+working on image 2700
+working on image 2800
+working on image 2900
+working on image 3000
+working on image 3100
+working on image 3200
+working on image 3300
+working on image 3400
+working on image 3500
+working on image 3600
+working on image 3700
+working on image 3800
+working on image 3900
+working on image 4000
+working on image 4100
+working on image 4200
+working on image 4300
+working on image 4400
+working on image 4500
+working on image 4600
+working on image 4700
+working on image 4800
+working on image 4900
+working on image 5000
+working on image 5100
+working on image 5200
+working on image 5300
+working on image 5400
+working on image 5500
+working on image 5600
+working on image 5700
+working on image 5800
+working on image 5900
+working on image 6000
+working on image 6100
+working on image 6200
+working on image 6300
+working on image 6400
+working on image 6500
+working on image 6600
+working on image 6700
+working on image 6800
+working on image 6900
+working on image 7000
+working on image 7100
+working on image 7200
+working on image 7300
+working on image 7400
+working on image 7500
+working on image 7600
+working on image 7700
+working on image 7800
+working on image 7900
+working on image 8000
+working on image 8100
+working on image 8200
+working on image 8300
+working on image 8400
+working on image 8500
+working on image 8600
+working on image 8700
+working on image 8800
+working on image 8900
+working on image 9000
+working on image 9100
+working on image 9200
+working on image 9300
+working on image 9400
+working on image 9500
+working on image 9600
+working on image 9700
+working on image 9800
+working on image 9900
+working on image 10000
+working on image 10100
+working on image 10200
+working on image 10300
+working on image 10400
+working on image 10500
+working on image 10600
+working on image 10700
+working on image 10800
+working on image 10900
+working on image 11000
+working on image 11100
+working on image 11200
+working on image 11300
+working on image 11400
+working on image 11500
+working on image 11600
+working on image 11700
+working on image 11800
+working on image 11900
+working on image 12000
+working on image 12100
+working on image 12200
+working on image 12300
+working on image 12400
+working on image 12500
+working on image 12600
+working on image 12700
+working on image 12800
+working on image 12900
+working on image 13000
+working on image 13100
+working on image 13200
+working on image 13300
+working on image 13400
+working on image 13500
+working on image 13600
+working on image 13700
+working on image 13800
+working on image 13900
+working on image 14000
+working on image 14100
+working on image 14200
+working on image 14300
+working on image 14400
+working on image 14500
+working on image 14600
+working on image 14700
+working on image 14800
+working on image 14900
+working on image 15000
+working on image 15100
+working on image 15200
+working on image 15300
+working on image 15400
+working on image 15500
+working on image 15600
+working on image 15700
+working on image 15800
+working on image 15900
+working on image 16000
+working on image 16100
+working on image 16200
+working on image 16300
+working on image 16400
+working on image 16500
+working on image 16600
+working on image 16700
+working on image 16800
+working on image 16900
+working on image 17000
+working on image 17100
+working on image 17200
+working on image 17300
+working on image 17400
+working on image 17500
+working on image 17600
+working on image 17700
+working on image 17800
+working on image 17900
+working on image 18000
+working on image 18100
+working on image 18200
+working on image 18300
+working on image 18400
+working on image 18500
+working on image 18600
+working on image 18700
+working on image 18800
+working on image 18900
+working on image 19000
+working on image 19100
+working on image 19200
+working on image 19300
+working on image 19400
+working on image 19500
+working on image 19600
+working on image 19700
+working on image 19800
+working on image 19900
+working on image 20000
+working on image 20100
+working on image 20200
+working on image 20300
+working on image 20400
+working on image 20500
+working on image 20600
+working on image 20700
+working on image 20800
+working on image 20900
+working on image 21000
+working on image 21100
+working on image 21200
+working on image 21300
+working on image 21400
+working on image 21500
+working on image 21600
+working on image 21700
+working on image 21800
+working on image 21900
+working on image 22000
+working on image 22100
+working on image 22200
+working on image 22300
+working on image 22400
+working on image 22500
+working on image 22600
+working on image 22700
+working on image 22800
+working on image 22900
+working on image 23000
+working on image 23100
+working on image 23200
+working on image 23300
+working on image 23400
+working on image 23500
+working on image 23600
+working on image 23700
+working on image 23800
+^CTraceback (most recent call last):
+  File "main.py", line 186, in <module>
+    bounded_img_list[key] = get_bounded_image(refer, ref_ids_dict[key], img_list[key])
+  File "main.py", line 87, in get_bounded_image
+    I = io.imread(osp.join(refer.IMAGE_DIR, loaded_img_list[i][0]['file_name']))
+  File "/home/ubuntu/anaconda3/envs/pytorch_p27/lib/python2.7/site-packages/skimage/io/_io.py", line 61, in imread
+    img = call_plugin('imread', fname, plugin=plugin, **plugin_args)
+  File "/home/ubuntu/anaconda3/envs/pytorch_p27/lib/python2.7/site-packages/skimage/io/manage_plugins.py", line 211, in call_plugin
+    return func(*args, **kwargs)
+  File "/home/ubuntu/anaconda3/envs/pytorch_p27/lib/python2.7/site-packages/skimage/io/_plugins/pil_plugin.py", line 37, in imread
+    return pil_to_ndarray(im, dtype=dtype, img_num=img_num)
+  File "/home/ubuntu/anaconda3/envs/pytorch_p27/lib/python2.7/site-packages/skimage/io/_plugins/pil_plugin.py", line 53, in pil_to_ndarray
+    im.getdata()[0]
+  File "/home/ubuntu/anaconda3/envs/pytorch_p27/lib/python2.7/site-packages/PIL/Image.py", line 1270, in getdata
+    self.load()
+  File "/home/ubuntu/anaconda3/envs/pytorch_p27/lib/python2.7/site-packages/PIL/ImageFile.py", line 241, in load
+    n, err_code = decoder.decode(b)
+KeyboardInterrupt
+w 

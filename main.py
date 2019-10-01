@@ -4,6 +4,7 @@ Created on Tue Sep 24 12:44:52 2019
 
 @author: pvsha
 """
+from const import global_consts as gc
 
 import matplotlib
 matplotlib.use('Agg')
@@ -19,7 +20,10 @@ import torchvision.models as  models
 import os.path as osp
 from RefcocoDataset import RefcocoDataset as RefD
 import torch.utils.data as Data
+import torch.nn.functional as F
 from model import Net
+from PIL import Image
+from torchvision import transforms
 
 def load_statistics(refer):
     print('dataset [%s_%s] contains: ' % (dataset, splitBy))
@@ -79,7 +83,10 @@ def get_refs_id_dict(refer, splits):
 
 def get_bounded_image(refer,ref_list,loaded_img_list):
     bounded_img_list = []
+    print("%d images to load" % len(loaded_img_list))
     for i in range(len(loaded_img_list)):
+        if (i % 100 == 0):
+            print("working on image %d" % i)
         I = io.imread(osp.join(refer.IMAGE_DIR, loaded_img_list[i][0]['file_name']))
         RefBox = get_refBox(ref_list[i])
         bounded_img_list.append(I[int(RefBox[1]):int(RefBox[1]+RefBox[3]),int(RefBox[0]):int(RefBox[0]+RefBox[2])])
@@ -92,9 +99,45 @@ def get_C4_vec(res50_C4,bounded_image_list):
         cropped_tensor = torch.from_numpy(bounded_image_list[i])
         cropped_tensor = cropped_tensor.reshape(1,cropped_tensor.shape[2],cropped_tensor.shape[0],cropped_tensor.shape[1])
         cropped_tensor = cropped_tensor.type(dtype=torch.FloatTensor)
-        bounded_outputs.append(res50_C4(cropped_tensor))
+        bounded_outputs.append(res50_C4(cropped_tensor.to(gc.device)).squeeze())
     print("C4_vec")
     return bounded_outputs
+
+def get_C4_vec_from_ref(res50_C4, refer, ref_list, loaded_img_list):
+    print("%d images to load" % len(loaded_img_list))
+    bounded_outputs = None
+    transform = transforms.Compose([
+        transforms.Resize(512),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+    for i in range(len(loaded_img_list)):
+#    for i in range(500):
+        if (i % 100 == 0):
+            print("working on image %d" % i)
+
+        I = io.imread(osp.join(refer.IMAGE_DIR, loaded_img_list[i][0]['file_name']))
+        RefBox = get_refBox(ref_list[i])
+        bounded_img = I[int(RefBox[1]):int(RefBox[1]+RefBox[3]),int(RefBox[0]):int(RefBox[0]+RefBox[2])]
+        if torch.tensor(bounded_img).dim() != 3:
+            bounded_img = torch.tensor(bounded_img).unsqueeze(2)
+            bounded_img = torch.cat([bounded_img, bounded_img, bounded_img], 2).numpy()
+        cropped_tensor = transform(Image.fromarray(bounded_img))
+        if cropped_tensor.dim() != 3:
+            cropped_tensor = cropped_tensor.unsqueeze(0)
+            cropped_tensor = torch.cat([croppped_tensor, cropped_tensor, cropped_tensor], 0)
+        cropped_tensor = cropped_tensor.unsqueeze(0)
+        cropped_tensor = cropped_tensor.to(torch.float).to(device)
+        output = res50_C4(cropped_tensor).squeeze().unsqueeze(0)
+
+        if bounded_outputs is None:
+            bounded_outputs = output.clone()
+        else:
+            bounded_outputs = torch.cat([bounded_outputs, output.clone()], 0)
+#        print(bounded_outputs.size())
+    print("C4_vec get")
+    return bounded_outputs.to("cpu")
+
 
 class Resnet_C4(nn.Module):
     def __init__(self, original_model):
@@ -114,6 +157,7 @@ class Resnet_C3(nn.Module):
 
 def build_vocab(refs, min_occur = 5):
     d = dict()
+#    tr = refs['train'][:500]
     tr = refs['train']
     print("start building vocabulary...")
     for i, ref in enumerate(tr):
@@ -129,13 +173,14 @@ def build_vocab(refs, min_occur = 5):
     l = filter(lambda x: x[1] > min_occur , sorted(l, lambda x, y: 1 if x[1] < y[1] else -1))
     return map(lambda x:x[0], l), map(lambda x:x[1], l)
 
+
 if __name__ == '__main__':
-    device = torch.device("cuda:%d" % gc.cuda if torch.cuda.is_available() else "cpu")
+    gc.device = device = torch.device("cuda:%d" % gc.cuda if torch.cuda.is_available() else "cpu")
     resnet_50 = models.resnet50(pretrained=True)
-    res50_C4 = Resnet_C4(resnet_50)
+    res50_C4 = Resnet_C4(resnet_50).to(gc.device)
 
     #Setting variables for data loading
-    data_root = '../data'  # contains refclef, refcoco, refcoco+, refcocog and images
+    data_root = '../../data'  # contains refclef, refcoco, refcoco+, refcocog and images
     dataset = 'refcoco+'
     splitBy = 'unc'
     refer = REFER(data_root, dataset, splitBy)
@@ -159,14 +204,14 @@ if __name__ == '__main__':
     bounded_img_list = dict()
     bounded_outputs = dict()
 
-    num = {'train': 50, 'test': 10, 'val':10}
     for key in ['train', 'test', 'val']:
-        img_list[key] = load_images(refer,refs_dict[key][:num[key]])
-    #    bounded_img_list[key] = get_bounded_image(refer, ref_ids_dict[key][:num[key]], img_list[key])
-    #    bounded_outputs[key] = get_C4_vec(res50_C4,bounded_img_list[key])
-#    print(len(bounded_outputs['train']))
-#    print(bounded_outputs['train'][0].size())
-#    print(bounded_outputs['train'][0])
+        img_list[key] = load_images(refer,refs_dict[key])
+        with torch.no_grad():
+            bounded_outputs[key] = get_C4_vec_from_ref(res50_C4, refer, ref_ids_dict[key], img_list[key])
+    print(len(bounded_outputs['train']))
+    print(bounded_outputs['train'].size())
+    print(bounded_outputs['train'])
+    gc.input_dim = bounded_outputs['train'].size()[1]
 
     vocab, freq = build_vocab(refs_dict)
     fout = open("vocab.txt", 'w')
@@ -174,6 +219,7 @@ if __name__ == '__main__':
         fout.write("%s\t%d\n" % (u, v))
 
     vocab = ['_PAD', '_BOS', '_UNK', '_EOS'] + vocab
+    gc.vocab_size = len(vocab)
 
     w2id = dict()
     for i, w in enumerate(vocab):
@@ -187,11 +233,13 @@ if __name__ == '__main__':
     sen2id = lambda x: w2id[x] if w2id.has_key(x) else gc.UNK_id
     for key in ['train', 'test', 'val']:
         labels[key] = []
-        for r in refs_dict[key][:num[key]]:
+#        for r in refs_dict[key][:500]:
+        for r in refs_dict[key]:
             labels[key].append(map(sen2id, r['sentences'][0]['tokens']) + [gc.EOS_id])
 
     feed_data = dict()
     for key in ['train', 'test', 'val']:
+#        feed_data[key] = RefD(bounded_outputs[key][:500], labels[key][:500])
         feed_data[key] = RefD(bounded_outputs[key], labels[key])
 
     train_loader = Data.DataLoader(
@@ -214,6 +262,7 @@ if __name__ == '__main__':
         )
 
     net = Net()
+    net.to(device)
     print net
 
     running_loss = 0.0
@@ -223,14 +272,20 @@ if __name__ == '__main__':
     for epoch in range(gc.epoch_num):
         print("Training epoch %d" % epoch)
         for i, data in enumerate(train_loader):
-            img, label = data
+            img, label, length = data
+            img = img.to(device)
+            label = label.to(device)
             outputs = net(img)
-            output_flat = []
-            label_flat = []
+            output_flat = None
+            label_flat = None
             for j in range(len(label)):
-                output_flat += outputs[j][:min(len(label[j]), gc.max_len)]
-                label_flat += label[j][:min(len(label[j]), gc.max_len)]
-            loss = criterion(outputs_flat, label_flat)
+                if output_flat is None:
+                    output_flat = outputs[j][:length[j]]
+                    label_flat = label[j][:length[j]]
+                else:
+                    output_flat = torch.cat([output_flat, outputs[j][:length[j]]], 0)
+                    label_flat = torch.cat([label_flat, label[j][:length[j]]], 0)
+            loss = criterion(output_flat, label_flat)
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
@@ -241,25 +296,29 @@ if __name__ == '__main__':
         with torch.no_grad():
             log_per = 0.0
             for i, data in enumerate(test_loader):
-                img, label = data
-                outputs = net(img)
+                img, label, length = data
+                img = img.to(device)
+                label = label.to(device)
+                outputs = F.softmax(net(img), -1)
                 output_flat = []
                 label_flat = []
                 for j in range(len(label)):
-                    for k in range(min(len(label[j]), gc.max_len)):
+                    for k in range(length[j]):
                         log_per += torch.log(outputs[j][k][label[j][k]])
                 log_per /= len(label)
-                print('Epoch %d: Perplexity on test: %.2f' % (epoch + 1, 2**(-log_per)))
+            print('Epoch %d: Perplexity on test: %.2f' % (epoch + 1, 2**(-log_per)))
 
             log_per = 0.0
             for i, data in enumerate(val_loader):
-                img, label = data
-                outputs = net(img)
+                img, label, length = data
+                img = img.to(device)
+                label = label.to(device)
+                outputs = F.softmax(net(img), -1)
                 output_flat = []
                 label_flat = []
                 for j in range(len(label)):
-                    for k in range(min(len(label[j]), gc.max_len)):
+                    for k in range(length[j]):
                         log_per += torch.log(outputs[j][k][label[j][k]])
                 log_per /= len(label)
-                print('Epoch %d: Perplexity on valid: %.2f' % (epoch + 1, 2**(-log_per)))
+            print('Epoch %d: Perplexity on valid: %.2f' % (epoch + 1, 2**(-log_per)))
 
