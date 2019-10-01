@@ -13,11 +13,11 @@ global VOCABSIZE
 VOCABSIZE = 6000
 
 class Net(nn.Module):
-    def __init__(self):
+    def __init__(self, pretrained_vector):
         super(Net, self).__init__()
         self.inputLinear = nn.Linear(gc.input_dim, gc.cell_dim)
-        self.embedding = nn.Embedding(gc.vocab_size, gc.norm_dim)
-        self.decoder = nn.LSTMCell(gc.norm_dim, gc.cell_dim)
+        self.embedding = nn.Embedding.from_pretrained(pretrained_vector)
+        self.decoder = nn.LSTMCell(gc.word_dim, gc.cell_dim)
         self.outputLinear = nn.Linear(gc.cell_dim, gc.vocab_size)
 
     def forward(self, img):

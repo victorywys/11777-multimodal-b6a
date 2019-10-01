@@ -4,6 +4,8 @@ class global_consts():
     cuda = 0
     device = None
 
+    wv_path = "../../data/glove/glove.6B.300d.txt"
+
     PAD_id = 0
     BOS_id = 1
     UNK_id = 2
@@ -14,6 +16,6 @@ class global_consts():
     learning_rate = 5e-4
 
     input_dim = 0
-    norm_dim = 512
+    word_dim = 300
     cell_dim = 512
     vocab_size = 0

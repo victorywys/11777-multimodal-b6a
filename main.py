@@ -218,8 +218,16 @@ if __name__ == '__main__':
     for u, v in zip(vocab, freq):
         fout.write("%s\t%d\n" % (u, v))
 
+    glove_vectors = load_wv(gc.wv_path)
+
     vocab = ['_PAD', '_BOS', '_UNK', '_EOS'] + vocab
     gc.vocab_size = len(vocab)
+    vocab_vectors = []
+    for w in vocab:
+        if glove_vectors.has_key(w):
+            vocab_vectors.append(glove_vectors[:])
+        else:
+            vocab_vectors.append([0 for _ in range(gc.word_dim)])
 
     w2id = dict()
     for i, w in enumerate(vocab):
@@ -261,7 +269,7 @@ if __name__ == '__main__':
             num_workers=1,
         )
 
-    net = Net()
+    net = Net(vocab_vectors)
     net.to(device)
     print net
 
