@@ -107,12 +107,11 @@ def get_C4_vec_from_ref(res50_C4, refer, ref_list, loaded_img_list):
     print("%d images to load" % len(loaded_img_list))
     bounded_outputs = None
     transform = transforms.Compose([
-        transforms.Resize(512),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+#        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
-    for i in range(len(loaded_img_list)):
-#    for i in range(500):
+#    for i in range(len(loaded_img_list)):
+    for i in range(500):
         if (i % 100 == 0):
             print("working on image %d" % i)
 
@@ -125,7 +124,7 @@ def get_C4_vec_from_ref(res50_C4, refer, ref_list, loaded_img_list):
         cropped_tensor = transform(Image.fromarray(bounded_img))
         if cropped_tensor.dim() != 3:
             cropped_tensor = cropped_tensor.unsqueeze(0)
-            cropped_tensor = torch.cat([croppped_tensor, cropped_tensor, cropped_tensor], 0)
+            cropped_tensor = torch.cat([cropped_tensor, cropped_tensor, cropped_tensor], 0)
         cropped_tensor = cropped_tensor.unsqueeze(0)
         cropped_tensor = cropped_tensor.to(torch.float).to(device)
         output = res50_C4(cropped_tensor).squeeze().unsqueeze(0)
@@ -155,10 +154,10 @@ class Resnet_C3(nn.Module):
         x = self.features(x)
         return x
 
-def build_vocab(refs, min_occur = 5):
+def build_vocab(refs, min_occur = 1):
     d = dict()
-#    tr = refs['train'][:500]
-    tr = refs['train']
+    tr = refs['train'][:500]
+#    tr = refs['train']
     print("start building vocabulary...")
     for i, ref in enumerate(tr):
         if i % 10000 == 0:
@@ -172,6 +171,17 @@ def build_vocab(refs, min_occur = 5):
     l = zip(d.keys(), d.values())
     l = filter(lambda x: x[1] > min_occur , sorted(l, lambda x, y: 1 if x[1] < y[1] else -1))
     return map(lambda x:x[0], l), map(lambda x:x[1], l)
+
+def load_wv(path):
+    vectors = {}
+    with open(path, 'r') as f:
+        for i, line in enumerate(f):
+            if i % 50000 == 0:
+                print("loading vector %d" % i)
+            l = line.strip().split()
+            vectors[l[0]] = map(lambda x: float(x), l[1:])
+    return vectors
+
 
 
 if __name__ == '__main__':
@@ -241,14 +251,14 @@ if __name__ == '__main__':
     sen2id = lambda x: w2id[x] if w2id.has_key(x) else gc.UNK_id
     for key in ['train', 'test', 'val']:
         labels[key] = []
-#        for r in refs_dict[key][:500]:
-        for r in refs_dict[key]:
+        for r in refs_dict[key][:500]:
+#        for r in refs_dict[key]:
             labels[key].append(map(sen2id, r['sentences'][0]['tokens']) + [gc.EOS_id])
 
     feed_data = dict()
     for key in ['train', 'test', 'val']:
-#        feed_data[key] = RefD(bounded_outputs[key][:500], labels[key][:500])
-        feed_data[key] = RefD(bounded_outputs[key], labels[key])
+        feed_data[key] = RefD(bounded_outputs[key][:500], labels[key][:500])
+#        feed_data[key] = RefD(bounded_outputs[key], labels[key])
 
     train_loader = Data.DataLoader(
             dataset=feed_data['train'],
@@ -271,7 +281,7 @@ if __name__ == '__main__':
 
     net = Net(vocab_vectors)
     net.to(device)
-    print net
+    print(net)
 
     running_loss = 0.0
     criterion = nn.CrossEntropyLoss(ignore_index=gc.UNK_id)
