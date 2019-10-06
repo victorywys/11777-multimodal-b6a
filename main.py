@@ -176,8 +176,6 @@ def build_vocab(refs, min_occur = 5):
 
 if __name__ == '__main__':
     gc.device = device = torch.device("cuda:%d" % gc.cuda if torch.cuda.is_available() else "cpu")
-    resnet_50 = models.resnet50(pretrained=True)
-    res50_C4 = Resnet_C4(resnet_50).to(gc.device)
 
     #Setting variables for data loading
     data_root = '../../data'  # contains refclef, refcoco, refcoco+, refcocog and images
@@ -191,27 +189,8 @@ if __name__ == '__main__':
     ref_ids_dict = get_refs_id_dict(refer,splits)
     refs_dict = get_refslist(refer,ref_ids_dict)
 
-    refs_small = refs_dict['train'][:10]
-    ref_id_small = ref_ids_dict['train'][:10]
-    print(len(refs_dict['train']))
-    print(len(refs_dict['test']))
-    print(len(refs_dict['val']))
-
     for i in refs_small:
         show_image_annoted(refer,i)
-
-    img_list = dict()
-    bounded_img_list = dict()
-    bounded_outputs = dict()
-
-    for key in ['train', 'test', 'val']:
-        img_list[key] = load_images(refer,refs_dict[key])
-        with torch.no_grad():
-            bounded_outputs[key] = get_C4_vec_from_ref(res50_C4, refer, ref_ids_dict[key], img_list[key])
-    print(len(bounded_outputs['train']))
-    print(bounded_outputs['train'].size())
-    print(bounded_outputs['train'])
-    gc.input_dim = bounded_outputs['train'].size()[1]
 
     vocab, freq = build_vocab(refs_dict)
     fout = open("vocab.txt", 'w')
@@ -247,8 +226,7 @@ if __name__ == '__main__':
 
     feed_data = dict()
     for key in ['train', 'test', 'val']:
-#        feed_data[key] = RefD(bounded_outputs[key][:500], labels[key][:500])
-        feed_data[key] = RefD(bounded_outputs[key], labels[key])
+        feed_data[key] = RefD(labels[key])
 
     train_loader = Data.DataLoader(
             dataset=feed_data['train'],
@@ -280,10 +258,10 @@ if __name__ == '__main__':
     for epoch in range(gc.epoch_num):
         print("Training epoch %d" % epoch)
         for i, data in enumerate(train_loader):
-            img, label, length = data
-            img = img.to(device)
+            word, label, length = data
+            word = word.to(device)
             label = label.to(device)
-            outputs = net(img)
+            outputs = net(word, length)
             output_flat = None
             label_flat = None
             for j in range(len(label)):
@@ -304,10 +282,10 @@ if __name__ == '__main__':
         with torch.no_grad():
             log_per = 0.0
             for i, data in enumerate(test_loader):
-                img, label, length = data
-                img = img.to(device)
+                word, label, length = data
+                word = word.to(device)
                 label = label.to(device)
-                outputs = F.softmax(net(img), -1)
+                outputs = F.softmax(net(word), -1)
                 output_flat = []
                 label_flat = []
                 for j in range(len(label)):
@@ -318,10 +296,10 @@ if __name__ == '__main__':
 
             log_per = 0.0
             for i, data in enumerate(val_loader):
-                img, label, length = data
-                img = img.to(device)
+                word, label, length = data
+                word = word.to(device)
                 label = label.to(device)
-                outputs = F.softmax(net(img), -1)
+                outputs = F.softmax(net(word), -1)
                 output_flat = []
                 label_flat = []
                 for j in range(len(label)):

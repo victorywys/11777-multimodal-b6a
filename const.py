@@ -12,10 +12,13 @@ class global_consts():
     EOS_id = 3
     batch_size = 32
     epoch_num = 30
-    max_len = 25
+    padding_len = 10
+    max_len = 10
     learning_rate = 5e-4
 
-    input_dim = 0
     word_dim = 300
     cell_dim = 512
+    num_layers = 2
+
+    input_dim = 0
     vocab_size = 0

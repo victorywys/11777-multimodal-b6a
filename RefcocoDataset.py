@@ -2,25 +2,30 @@ import torch
 from torch.utils.data import Dataset
 from const import global_consts as gc
 
-class RefcocoDataset(Dataset):
-    def __init__(self, img, label):
-        self.input = img
-        self.output = label
-        if (len(self.input) != len(self.output)):
-            print("Warning: the number of images(%d) is not equal to the number of labels(%d)")
+class LMDataset(Dataset):
+    def __init__(self, label):
+        def padding(sen, pad):
+            if len(sen) >= pad:
+                return sen[:pad]
+            else:
+                return sen[:] + [gc.PAD_id for i in range(len(sen), pad)]
+
+        def trunc(sen, mlen):
+            if len(sen) >= mlen:
+                return sen[:mlen]
+            else:
+                return sen[:]
+
+        self.input = []
+        self.output = []
+        for sen in label:
+            self.input.append(padding(sen, gc.padding_len))
+            self.output.append(trunc(sen, gc.max_len))
         self.num = len(self.input)
 
     def __len__(self):
-        return len(self.input)
+        return self.num
 
     def __getitem__(self, idx):
-        if torch.is_tensor(idx):
-            idx = idx.tolist()
-        label = torch.tensor(self.output[idx])
-        if len(self.output[idx]) >= gc.max_len:
-            label = torch.tensor(self.output[idx][:gc.max_len])
-            length = gc.max_len
-        else:
-            label = torch.cat([torch.tensor(self.output[idx]), torch.zeros(gc.max_len - len(self.output[idx]), dtype=torch.long)], 0)
-            length = len(self.output[idx])
-        return self.input[idx], label, length
+        length = len(self.output[idx])
+        return torch.tensor(self.input[idx]), self.output[idx], length
