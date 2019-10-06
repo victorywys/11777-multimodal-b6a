@@ -10,15 +10,18 @@ class global_consts():
     BOS_id = 1
     UNK_id = 2
     EOS_id = 3
-    batch_size = 32
-    epoch_num = 30
+    batch_size = 64
+    epoch_num = 200
     padding_len = 10
     max_len = 10
-    learning_rate = 5e-4
+    learning_rate = 1e-5
+
+    cell_type = "LSTM"
 
     word_dim = 300
     cell_dim = 512
     num_layers = 2
 
-    input_dim = 0
+    input_dim = 300
+
     vocab_size = 0

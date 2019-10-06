@@ -18,9 +18,11 @@ class LMDataset(Dataset):
 
         self.input = []
         self.output = []
+        self.length = []
         for sen in label:
             self.input.append(padding(sen, gc.padding_len))
-            self.output.append(trunc(sen, gc.max_len))
+            self.length.append(min(gc.max_len, len(sen)))
+            self.output.append(padding(sen, gc.max_len))
         self.num = len(self.input)
 
     def __len__(self):
@@ -28,4 +30,6 @@ class LMDataset(Dataset):
 
     def __getitem__(self, idx):
         length = len(self.output[idx])
-        return torch.tensor(self.input[idx]), self.output[idx], length
+        return torch.tensor(self.input[idx]), torch.tensor(self.output[idx]), self.length[idx]
+#        return torch.cumsum(torch.ones_like(torch.tensor(self.input[idx]), dtype=torch.long), dim=0), \
+#                torch.cumsum(torch.ones_like(torch.tensor(self.output[idx]), dtype=torch.long), dim=0), self.length[idx]

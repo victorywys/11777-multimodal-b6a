@@ -155,7 +155,7 @@ class Resnet_C3(nn.Module):
         x = self.features(x)
         return x
 
-def build_vocab(refs, min_occur = 5):
+def build_vocab(refs, min_occur = 2):
     d = dict()
 #    tr = refs['train'][:500]
     tr = refs['train']
@@ -172,6 +172,16 @@ def build_vocab(refs, min_occur = 5):
     l = zip(d.keys(), d.values())
     l = filter(lambda x: x[1] > min_occur , sorted(l, lambda x, y: 1 if x[1] < y[1] else -1))
     return map(lambda x:x[0], l), map(lambda x:x[1], l)
+
+def load_wv(path):
+    vectors = {}
+    with open(path, 'r') as f:
+        for i, line in enumerate(f):
+            if i % 50000 == 0:
+                print("loading vector %d" % i)
+            l = line.strip().split()
+            vectors[l[0]] = map(lambda x: float(x), l[1:])
+    return vectors
 
 
 if __name__ == '__main__':
@@ -201,9 +211,9 @@ if __name__ == '__main__':
     vocab_vectors = []
     for w in vocab:
         if glove_vectors.has_key(w):
-            vocab_vectors.append(glove_vectors[:])
+            vocab_vectors.append(glove_vectors[w][:])
         else:
-            vocab_vectors.append([0 for _ in range(gc.word_dim)])
+            vocab_vectors.append(torch.randn(gc.word_dim).tolist())
 
     w2id = dict()
     for i, w in enumerate(vocab):
@@ -257,8 +267,7 @@ if __name__ == '__main__':
         for i, data in enumerate(train_loader):
             word, label, length = data
             word = word.to(device)
-            label = label.to(device)
-            outputs = net(word, length)
+            outputs = net(word)
             output_flat = None
             label_flat = None
             for j in range(len(label)):
@@ -268,7 +277,7 @@ if __name__ == '__main__':
                 else:
                     output_flat = torch.cat([output_flat, outputs[j][:length[j]]], 0)
                     label_flat = torch.cat([label_flat, label[j][:length[j]]], 0)
-            loss = criterion(output_flat, label_flat)
+            loss = criterion(output_flat, label_flat.to(device))
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
@@ -281,27 +290,21 @@ if __name__ == '__main__':
             for i, data in enumerate(test_loader):
                 word, label, length = data
                 word = word.to(device)
-                label = label.to(device)
-                outputs = F.softmax(net(word), -1)
-                output_flat = []
-                label_flat = []
+                outputs = F.softmax(net(word, True), -1)
                 for j in range(len(label)):
                     for k in range(length[j]):
                         log_per += torch.log(outputs[j][k][label[j][k]])
-                log_per /= len(label)
+                log_per /= sum(length)
             print('Epoch %d: Perplexity on test: %.2f' % (epoch + 1, 2**(-log_per)))
 
             log_per = 0.0
             for i, data in enumerate(val_loader):
                 word, label, length = data
                 word = word.to(device)
-                label = label.to(device)
-                outputs = F.softmax(net(word), -1)
-                output_flat = []
-                label_flat = []
+                outputs = F.softmax(net(word, True), -1)
                 for j in range(len(label)):
                     for k in range(length[j]):
                         log_per += torch.log(outputs[j][k][label[j][k]])
-                log_per /= len(label)
+                log_per /= sum(length)
             print('Epoch %d: Perplexity on valid: %.2f' % (epoch + 1, 2**(-log_per)))
 
