@@ -18,7 +18,7 @@ import torch.optim as optim
 import torch
 import torchvision.models as  models
 import os.path as osp
-from RefcocoDataset import RefcocoDataset as RefD
+from RefcocoDataset import LMDataset
 import torch.utils.data as Data
 import torch.nn.functional as F
 from model import Net
@@ -189,9 +189,6 @@ if __name__ == '__main__':
     ref_ids_dict = get_refs_id_dict(refer,splits)
     refs_dict = get_refslist(refer,ref_ids_dict)
 
-    for i in refs_small:
-        show_image_annoted(refer,i)
-
     vocab, freq = build_vocab(refs_dict)
     fout = open("vocab.txt", 'w')
     for u, v in zip(vocab, freq):
@@ -226,7 +223,7 @@ if __name__ == '__main__':
 
     feed_data = dict()
     for key in ['train', 'test', 'val']:
-        feed_data[key] = RefD(labels[key])
+        feed_data[key] = LMDataset(labels[key])
 
     train_loader = Data.DataLoader(
             dataset=feed_data['train'],
