@@ -9,6 +9,8 @@ from const import global_consts as gc
 import matplotlib
 matplotlib.use('Agg')
 
+import argparse
+
 from refer import REFER
 import numpy as np
 import skimage.io as io
@@ -185,10 +187,23 @@ def load_wv(path):
 
 
 if __name__ == '__main__':
-    gc.device = device = torch.device("cuda:%d" % gc.cuda if torch.cuda.is_available() else "cpu")
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("-batch_size", help="batch size", type=int, default=64)
+    parser.add_argument("-cuda", help="which gpu to use", type=int, default=0)
+    parser.add_argument("-cpu", help="use cpu", type=bool, default=False)
+    parser.add_argument("-epoch", help="how many epochs to train", type=int, default=100)
+    parser.add_argument("-data", help="where the refcoco data is located", type=str, default=None)
+
+    args = parser.parse_args()
+    for key in args.__dict__:
+        if gc.__dict__.has_key(key) and not args.__dict__[key] is None:
+            gc.__dict__[key] = args.__dict__[key]
+
+    gc.device = device = torch.device("cuda:%d" % gc.cuda if torch.cuda.is_available() or gc.use_cpu else "cpu")
 
     #Setting variables for data loading
-    data_root = '../../data'  # contains refclef, refcoco, refcoco+, refcocog and images
+    data_root = gc.data  # contains refclef, refcoco, refcoco+, refcocog and images
     dataset = 'refcoco+'
     splitBy = 'unc'
     refer = REFER(data_root, dataset, splitBy)

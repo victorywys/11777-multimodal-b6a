@@ -1,9 +1,11 @@
 class global_consts():
     debug = False
 
+    use_cpu = False
     cuda = 0
     device = None
 
+    data = "../../data"
     wv_path = "../../data/glove/glove.6B.300d.txt"
 
     PAD_id = 0
