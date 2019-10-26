@@ -11,16 +11,16 @@ class CcaEmbedding(nn.Module):
     def __init__(self, vis_enc_size=512, lang_enc_size=512, emb_size=512):
         #initializer = chainer.initializers.GlorotNormal(scale=math.sqrt(2))
         super(CcaEmbedding, self).__init__(
-            normv0 = nn.BatchNorm1d(512, eps=1e-5),
+            normv0 = nn.BatchNorm1d(512),# eps=1e-5),
             v1 = nn.Linear(vis_enc_size, emb_size),# initialW=initializer),
-            normv1 = nn.BatchNorm1d(emb_size, eps=1e-5),
+            normv1 = nn.BatchNorm1d(emb_size),# eps=1e-5),
             v2 = nn.Linear(emb_size, emb_size),# initialW=initializer),
-            normv2 = nn.BatchNorm1d(emb_size, eps=1e-5),
+            normv2 = nn.BatchNorm1d(emb_size),# eps=1e-5),
             
             l1 = nn.Linear(lang_enc_size, emb_size),# initialW=initializer),
-            norml1 = nn.BatchNorm1d(emb_size, eps=1e-5),
+            norml1 = nn.BatchNorm1d(emb_size),# eps=1e-5),
             l2 = nn.Linear(emb_size, emb_size),# initialW=initializer),
-            norml2 = nn.BatchNorm1d(emb_size, eps=1e-5),
+            norml2 = nn.BatchNorm1d(emb_size),# eps=1e-5),
         )
         
     def vis_forward(self, vis):

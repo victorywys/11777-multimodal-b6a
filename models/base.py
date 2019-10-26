@@ -58,15 +58,19 @@ class LanguageEncoderAttn(nn.Module):
         )
         
     def LSTMForward(self, sents_emb, max_last_ind):
-        self.LSTM.reset_state()
+        #self.LSTM.reset_state()
+        self.LSTM.h_0 = None
+        self.LSTM.c_0 = None
         h_list = []
         for i in range(max_last_ind+1):
-            h = self.LSTM(sents_emb[:,i])
+            _,(h,c) = self.LSTM(sents_emb[:,i])
             h_list.append(h)# length*b*512
         return h_list
     
-    def create_word_mask(self, lang_last_ind, xp):
-        mask = xp.zeros((len(lang_last_ind), max(lang_last_ind)+1), dtype=xp.float32)
+    def create_word_mask(self, lang_last_ind):#, xp):
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        mask = torch.zeros((len(lang_last_ind),max(lang_last_ind)+1)).to(device)
+        #mask = xp.zeros((len(lang_last_ind), max(lang_last_ind)+1), dtype=xp.float32)
         for i in range(len(lang_last_ind)):
             mask[i,:lang_last_ind[i]+1] = 1
         return mask
@@ -76,10 +80,10 @@ class LanguageEncoderAttn(nn.Module):
         seq_length = max(lang_last_ind)+1
         lstm_out = torch.reshape(torch.concat(lstm_out, axis = 1), (batch_size*seq_length, -1))
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        xp = torch.tensor(lstm_out, device=device)
+        #xp = torch.tensor(lstm_out, device=device)
         #xp = cuda.get_array_module(lstm_out)
         
-        word_mask = self.create_word_mask(lang_last_ind, xp) #b*seq_length
+        word_mask = self.create_word_mask(lang_last_ind)#, xp) #b*seq_length
         h = F.dropout(F.relu(self.linear1(lstm_out)), ratio=0.1)
         h = torch.reshape(self.linear2(h), (batch_size, seq_length))
         h = h*word_mask+(word_mask*1024-1024) 
@@ -108,10 +112,12 @@ class LanguageEncoder(nn.Module):
         )
         
     def LSTMForward(self, sents_emb, max_last_ind):
-        self.LSTM.reset_state()
+        #self.LSTM.reset_state()
+        self.LSTM.h_0 = None
+        self.LSTM.c_0 = None
         h_list = []
         for i in range(max_last_ind+1):
-            h = self.LSTM(sents_emb[:,i])
+            _,(h,c) = self.LSTM(sents_emb[:,i])
             h_list.append(h)# length*b*512
         return h_list
     
@@ -127,13 +133,13 @@ class MetricNet(nn.Module):
         super(MetricNet, self).__init__(
             fc1 = nn.Linear(512+512, 512),#, initialW=initializer),
             #torch.nn.init.xavier_uniform(fc1),
-            norm1 = nn.BatchNorma1d(512, eps=1e-5),
+            norm1 = nn.BatchNorma1d(512),# eps=1e-5),
             fc2 = nn.Linear(512, 512),# initialW=initializer),
             #torch.nn.init.xavier_uniform(fc2),
-            norm2 = nn.BatchNorma1d(512, eps=1e-5),
+            norm2 = nn.BatchNorma1d(512),# eps=1e-5),
             fc3 = nn.Linear(512, 1),# initialW=initializer),
             #torch.nn.init.xavier_uniform(fc3),
-            vis_norm = nn.BatchNorma1d(512, eps=1e-5),
+            vis_norm = nn.BatchNorma1d(512),# eps=1e-5),
         )
         
     def __call__(self, vis, lang):
