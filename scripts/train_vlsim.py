@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 # import chainer.links as L
 # from chainer import cuda, Variable, optimizers, serializers
 
+import h5py
 import torchvision.models as models
 import torch
 import torch.nn.functional as F
@@ -223,7 +224,9 @@ def train_vl(params):
                     save_model.ve = ve
                     save_model.le = le
                     save_model.me = me
-                    serializers.save_hdf5(osp.join(model_dir, params['id']+".h5"), save_model)
+
+                    torch.save(save_model, osp.join(model_dir, params['id']+".h5"))
+                    #serializers.save_hdf5(osp.join(model_dir, params['id']+".h5"), save_model)
                     
                 ## graph
                 plt.title("accuracy")
