@@ -49,7 +49,7 @@ class LanguageEncoderAttn(nn.Module):
     def __init__(self,vocab_size):
         super(LanguageEncoderAttn, self).__init__(
            #word_emb = nn.EmbedID(vocab_size+2, 512),####
-            word_emb = nn.Embedding(vocab_size+2, 512)
+            word_emb = nn.Embedding(vocab_size+2, 512),
             LSTM = nn.LSTM(512, 512),
             linear1 = nn.Linear(512, 512),
             linear2 = nn.Linear(512, 1),
