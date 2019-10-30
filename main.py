@@ -5,11 +5,13 @@ Created on Tue Sep 24 12:44:52 2019
 @author: pvsha
 """
 from const import global_consts as gc
+import sys
+sys.path.append("/home/ubuntu/11777/yansen/11777-multimodal-b6a/refer/")
 
 import matplotlib
 matplotlib.use('Agg')
 
-from refer import REFER
+from refer.refer import REFER
 import numpy as np
 import skimage.io as io
 import matplotlib.pyplot as plt
@@ -24,7 +26,6 @@ import torch.nn.functional as F
 from model import Net
 from PIL import Image
 from torchvision import transforms
-
 def load_statistics(refer):
     print('dataset [%s_%s] contains: ' % (dataset, splitBy))
     ref_ids = refer.getRefIds()
