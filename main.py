@@ -11,7 +11,7 @@ sys.path.append("/home/ubuntu/11777/yansen/11777-multimodal-b6a/refer/")
 import matplotlib
 matplotlib.use('Agg')
 
-from refer.refer import REFER
+from refer import REFER
 import numpy as np
 import skimage.io as io
 import matplotlib.pyplot as plt
