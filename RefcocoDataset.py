@@ -41,4 +41,4 @@ class RefcocoDataset(Dataset):
         box_feature = torch.tensor(np.load("%s/features/%d.npy" % (gc.box_path, ref_id)))
         out_len = len(self.label[idx])
         label = torch.tensor(self.label[idx] + [0] * (gc.output_padding - out_len))
-        return box_num, img_feature, box_feature, out_len, label, atten_mask
+        return ref_id, box_num, img_feature, box_feature, out_len, label, atten_mask

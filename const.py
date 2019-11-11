@@ -1,7 +1,7 @@
 class global_consts():
     debug = False
     inference = True
-    checkpoint_id = 11
+    checkpoint_id = 12
 
     cuda = 0
     device = None

@@ -7,11 +7,16 @@ Created on Tue Sep 24 12:44:52 2019
 from const import global_consts as gc
 import sys
 sys.path.append("/home/ubuntu/11777/yansen/11777-multimodal-b6a/refer/")
+sys.path.append("../refer")
+sys.path.append("../refer/evaluation")
+sys.path.append("../refer/evaluation/bleu")
+sys.path.append("../refer/evaluation/cider")
 
 import matplotlib
 matplotlib.use('Agg')
 
 from refer import REFER
+from evaluation.refEvaluation import *
 import numpy as np
 import skimage.io as io
 import matplotlib.pyplot as plt
@@ -27,6 +32,7 @@ import torch.nn.functional as F
 from model import Net
 from PIL import Image
 from torchvision import transforms
+import json
 
 import util
 def load_statistics(refer):
@@ -171,7 +177,6 @@ if __name__ == '__main__':
     word_id = dict()
     for i, w in enumerate(vocab):
         word_id[w] = i
-    print(word_id)
 
     w2id = lambda x: word_id[x] if x in word_id else gc.UNK_id
     gc.label = label = {}
@@ -217,11 +222,50 @@ if __name__ == '__main__':
 
     if gc.inference:
         net = torch.load('%s/model_checkpoint_%d.pt' % (gc.checkpoint_path, gc.checkpoint_id))
+        fout = open("testA.txt", 'w')
+        print("evaluating on testA")
+        id_list = []
+        Res = []
+        if True:
+#        with torch.no_grad():
+            for i, data in enumerate(testA_loader):
+                ref_id, box_num, img, box, out_len, label, atten_mask = data
+                ref_id = ref_id.tolist()
+                img = img.to(device)
+                label = label.to(device)
+                box = box.to(device)
+                atten_mask = atten_mask.to(device)
+                outputs = net(img, box, atten_mask)
+                predict = outputs.argmax(-1)[:, :8].tolist()
+                for j in range(len(label)):
+                    if ref_id[j] in id_list:
+                        continue
+                    id_list.append(ref_id[j])
+                    fout.write("golden:\n\t")
+                    for k in range(out_len[j]):
+                        if label[j][k] > 3:
+                            fout.write("%s " % vocab[label[j][k]])
+                    fout.write("\npredict:\n\t")
+                    sen = ""
+                    for k in range(len(predict[j])):
+                        if predict[j][k] == gc.EOS_id:
+                            break
+                        fout.write("%s " % vocab[predict[j][k]])
+                        sen = sen + vocab[predict[j][k]] + " "
+                    fout.write("\n\n")
+                    Res.append({'ref_id': ref_id[j], 'sent': sen.strip()})
+        fout.close()
+        json.dump(Res, open("testA.json", 'w'))
+
+        print("evaluating on testB")
         fout = open("testB.txt", 'w')
+        id_list = []
+        Res = []
         if True:
 #        with torch.no_grad():
             for i, data in enumerate(testB_loader):
-                box_num, img, box, out_len, label, atten_mask = data
+                ref_id, box_num, img, box, out_len, label, atten_mask = data
+                ref_id = ref_id.tolist()
                 img = img.to(device)
                 label = label.to(device)
                 box = box.to(device)
@@ -229,17 +273,24 @@ if __name__ == '__main__':
                 outputs = net(img, box, atten_mask)
                 predict = outputs.argmax(-1).tolist()
                 for j in range(len(label)):
+                    if ref_id[j] in id_list:
+                        continue
+                    id_list.append(ref_id[j])
                     fout.write("golden:\n\t")
                     for k in range(out_len[j]):
                         if label[j][k] > 3:
                             fout.write("%s " % vocab[label[j][k]])
                     fout.write("\npredict:\n\t")
+                    sen = ""
                     for k in range(len(predict[j])):
                         if predict[j][k] == gc.EOS_id:
                             break
                         fout.write("%s " % vocab[predict[j][k]])
+                        sen = sen + vocab[predict[j][k]] + " "
                     fout.write("\n\n")
+                    Res.append({'ref_id': ref_id[j], 'sent': sen.strip()})
         fout.close()
+        json.dump(Res, open("testB.json", 'w'))
         sys.exit()
 
     running_loss = 0.0
@@ -249,7 +300,7 @@ if __name__ == '__main__':
     for epoch in range(gc.epoch_num):
         print("Training epoch %d" % epoch)
         for i, data in enumerate(train_loader):
-            box_num, img, box, out_len, label, atten_mask = data
+            _, box_num, img, box, out_len, label, atten_mask = data
             img = img.to(device)
             label = label.to(device)
             box = box.to(device)
@@ -281,7 +332,7 @@ if __name__ == '__main__':
         with torch.no_grad():
             log_per = 0.0
             for i, data in enumerate(testA_loader):
-                box_num, img, box, out_len, label, atten_mask = data
+                _, box_num, img, box, out_len, label, atten_mask = data
                 img = img.to(device)
                 label = label.to(device)
                 box = box.to(device)
@@ -296,7 +347,7 @@ if __name__ == '__main__':
 
             log_per = 0.0
             for i, data in enumerate(testB_loader):
-                box_num, img, box, out_len, label, atten_mask = data
+                _, box_num, img, box, out_len, label, atten_mask = data
                 img = img.to(device)
                 label = label.to(device)
                 box = box.to(device)
@@ -311,7 +362,7 @@ if __name__ == '__main__':
 
             log_per = 0.0
             for i, data in enumerate(val_loader):
-                box_num, img, box, out_len, label, atten_mask = data
+                _, box_num, img, box, out_len, label, atten_mask = data
                 img = img.to(device)
                 label = label.to(device)
                 box = box.to(device)
