@@ -114,6 +114,22 @@ class EncoderLayer(nn.Module):
         x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, mask))
         return self.sublayer[1](x, self.feed_forward)
 
+class EncoderLayer_2b(nn.Module):
+    "Encoder is made up of self-attn and feed forward (defined below)"
+    def __init__(self, size, self_attn, feed_forward, dropout):
+        super(EncoderLayer_2b, self).__init__()
+        self.self_attn = self_attn
+        self.feed_forward = feed_forward
+        self.sublayer = clones(SublayerConnection(size, dropout), 1)
+        self.size = size
+
+    def forward(self, x, mask):
+        "Follow Figure 1 (left) for connections."
+        x_sur = self.self_attn(x[:, 1:], x[:, 0].unsqueeze(1), x[:, 0].unsqueeze(1), mask[:, :, 0].unsqueeze(-1))
+        x = torch.cat((x[:, 0].unsqueeze(1), x_sur), dim=1)
+        # x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, mask))
+        return self.sublayer[0](x, self.feed_forward)
+
 class Decoder(nn.Module):
     "Generic N layer decoder with masking."
     def __init__(self, layer, N):
@@ -244,7 +260,7 @@ class TransformerModel(AttModel):
         ff = PositionwiseFeedForward(d_model, d_ff, dropout)
         position = PositionalEncoding(d_model, dropout)
         model = EncoderDecoder(
-            Encoder(EncoderLayer(d_model, c(attn), c(ff), dropout), N),
+            Encoder(EncoderLayer_2b(d_model, c(attn), c(ff), dropout), N),
             Decoder(DecoderLayer(d_model, c(attn), c(attn), 
                                  c(ff), dropout), N),
             lambda x:x, # nn.Sequential(Embeddings(d_model, src_vocab), c(position)),
