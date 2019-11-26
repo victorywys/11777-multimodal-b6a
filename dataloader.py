@@ -33,7 +33,7 @@ class DataLoader(data.Dataset):
         self.opt = opt
         self.batch_size = self.opt.batch_size
         self.seq_per_img = opt.seq_per_img
-        
+
         # feature related options
         self.use_att = getattr(opt, 'use_att', True)
         self.use_box = getattr(opt, 'use_box', 0)
@@ -46,7 +46,7 @@ class DataLoader(data.Dataset):
         self.ix_to_word = self.info['ix_to_word']
         self.vocab_size = len(self.ix_to_word)
         print('vocab size is ', self.vocab_size)
-        
+
         # open the hdf5 file
         print('DataLoader loading h5 file: ', opt.input_fc_dir, opt.input_att_dir, opt.input_box_dir, opt.input_label_h5)
         self.h5_label_file = h5py.File(self.opt.input_label_h5, 'r', driver='core')
@@ -62,9 +62,24 @@ class DataLoader(data.Dataset):
         # load the pointers in full to RAM (should be small enough)
         self.label_start_ix = self.h5_label_file['label_start_ix'][:]
         self.label_end_ix = self.h5_label_file['label_end_ix'][:]
+        self.img_start_ix = self.h5_label_file['img_start_ix'][:]
+        self.img_end_ix = self.h5_label_file['img_end_ix'][:]
 
         self.num_images = self.label_start_ix.shape[0]
         print('read %d image features' %(self.num_images))
+
+        self.negative_sample_ix = []
+        for i in range(self.num_images):
+            self.negative_sample_ix.append([])
+            for j in range(self.img_start_ix[i], self.img_end_ix[i] + 1):
+                if j != i:
+                    self.negative_sample_ix[-1].append(j)
+            if (len(self.negative_sample_ix[-1]) == 0):
+                for _ in range(3):
+                    r = random.randint(1, len(self.img_start_ix)) - 1
+                    while r == i:
+                        r = random.randint(1, len(self.img_start_ix)) - 1
+                    self.negative_sample_ix[-1].append(r)
 
         # separate out indexes for each of the provided splits
         self.split_ix = {'train': [], 'val': [], 'test': [], 'testA': [], 'testB': []}
@@ -90,7 +105,7 @@ class DataLoader(data.Dataset):
         print('assigned %d images to split testB' % len(self.split_ix['testB']))
 
         self.iterators = {'train': 0, 'val': 0, 'test': 0, 'testA': 0, 'testB': 0}
-        
+
         self._prefetch_process = {} # The three prefetch process
         for split in self.iterators.keys():
             self._prefetch_process[split] = BlobFetcher(split, self, split=='train')
@@ -118,17 +133,34 @@ class DataLoader(data.Dataset):
         else:
             ixl = random.randint(ix1, ix2 - seq_per_img + 1)
             seq = self.h5_label_file['labels'][ixl: ixl + seq_per_img, :self.seq_length]
-
         return seq
+
+    def get_negative_sample(self, ix, seq_per_img):
+        negative_ixs = self.negative_sample_ix[ix]
+        label_ret = np.zeros((seq_per_img, self.seq_length), dtype = 'int')
+        feat_ret = np.zeros((seq_per_img, self.opt.att_feat_size), dtype = 'float32')
+        for i in range(seq_per_img):
+            sampled_ix = random.choice(negative_ixs)
+            ix1 = self.label_start_ix[ix] - 1
+            ix2 = self.label_end_ix[ix] - 1
+            sampled_label = self.h5_label_file['labels'][random.randint(ix1, ix2), :self.seq_length]
+            label_ret[i, :] = sampled_label
+            sampled_feat = np.load(os.path.join(self.input_att_dir, str(self.info['images'][sampled_ix]['id']) + '.npy'))
+            feat_ret[i, :] = sampled_feat
+        return feat_ret, label_ret
+
 
     def get_batch(self, split, batch_size=None, seq_per_img=None):
         batch_size = batch_size or self.batch_size
         seq_per_img = seq_per_img or self.seq_per_img
 
         fc_batch = [] # np.ndarray((batch_size * seq_per_img, self.opt.fc_feat_size), dtype = 'float32')
-        att_batch = [] # np.ndarray((batch_size * seq_per_img, 14, 14, self.opt.att_feat_size), dtype = 'float32')
+        att_batch = [] # np.ndarray((batch_size * seq_per_img, self.opt.att_feat_size), dtype = 'float32')
         label_batch = np.zeros([batch_size * seq_per_img, self.seq_length + 2], dtype = 'int')
         mask_batch = np.zeros([batch_size * seq_per_img, self.seq_length + 2], dtype = 'float32')
+        negative_label_batch = np.zeros([batch_size * seq_per_img, self.seq_length + 2], dtype = 'int')
+        negative_att_batch = np.zeros([batch_size * seq_per_img, self.opt.att_feat_size]) # np.ndarray((batch_size * seq_per_img, self.opt.att_feat_size), dtype='float32')
+        negative_mask_batch = np.zeros([batch_size * seq_per_img, self.seq_length + 2], dtype = 'float32')
 
         wrapped = False
 
@@ -141,15 +173,19 @@ class DataLoader(data.Dataset):
                 ix, tmp_wrapped = self._prefetch_process[split].get()
             fc_batch.append(tmp_fc)
             att_batch.append(tmp_att)
-            
+
             label_batch[i * seq_per_img : (i + 1) * seq_per_img, 1 : self.seq_length + 1] = self.get_captions(ix, seq_per_img)
+
+            negative_feat, negative_label = self.get_negative_sample(ix, seq_per_img)
+            negative_label_batch[i * seq_per_img : (i + 1) * seq_per_img, 1 : self.seq_length + 1] = negative_label
+            negative_att_batch[i * seq_per_img : (i + 1) * seq_per_img, :] = negative_feat
 
             if tmp_wrapped:
                 wrapped = True
 
             # Used for reward evaluation
             gts.append(self.h5_label_file['labels'][self.label_start_ix[ix] - 1: self.label_end_ix[ix]])
-        
+
             # record associated info as well
             info_dict = {}
             info_dict['ix'] = ix
@@ -160,28 +196,31 @@ class DataLoader(data.Dataset):
         # #sort by att_feat length
         # fc_batch, att_batch, label_batch, gts, infos = \
         #     zip(*sorted(zip(fc_batch, att_batch, np.vsplit(label_batch, batch_size), gts, infos), key=lambda x: len(x[1]), reverse=True))
-        fc_batch, att_batch, label_batch, gts, infos = \
-            zip(*sorted(zip(fc_batch, att_batch, np.vsplit(label_batch, batch_size), gts, infos), key=lambda x: 0, reverse=True))
+        fc_batch, att_batch, negative_att_batch, label_batch, negative_label_batch, gts, infos = \
+            zip(*sorted(zip(fc_batch, att_batch, np.vsplit(negative_att_batch, batch_size), np.vsplit(label_batch, batch_size), np.vsplit(negative_label_batch, batch_size), gts, infos), key=lambda x: 0, reverse=True))
         data = {}
         data['fc_feats'] = np.stack(reduce(lambda x,y:x+y, [[_]*seq_per_img for _ in fc_batch]))
         # merge att_feats
         max_att_len = max([_.shape[0] for _ in att_batch])
-        data['att_feats'] = np.zeros([len(att_batch)*seq_per_img, max_att_len, att_batch[0].shape[1]], dtype = 'float32')
-        for i in range(len(att_batch)):
-            data['att_feats'][i*seq_per_img:(i+1)*seq_per_img, :att_batch[i].shape[0]] = att_batch[i]
-        data['att_masks'] = np.zeros(data['att_feats'].shape[:2], dtype='float32')
-        for i in range(len(att_batch)):
-            data['att_masks'][i*seq_per_img:(i+1)*seq_per_img, :att_batch[i].shape[0]] = 1
+        data['att_feats'] = np.stack(reduce(lambda x,y:x+y, [[_]*seq_per_img for _ in att_batch]))
+
+        data['negative_att_feats'] = np.vstack(negative_att_batch)
+
         # set att_masks to None if attention features have same length
-        if data['att_masks'].sum() == data['att_masks'].size:
-            data['att_masks'] = None
+        data['att_masks'] = None
 
         data['labels'] = np.vstack(label_batch)
+        data['negative_labels'] = np.vstack(negative_label_batch)
         # generate mask
         nonzeros = np.array(list(map(lambda x: (x != 0).sum()+2, data['labels'])))
         for ix, row in enumerate(mask_batch):
             row[:nonzeros[ix]] = 1
         data['masks'] = mask_batch
+
+        nonzeros = np.array(list(map(lambda x: (x != 0).sum()+2, data['negative_labels'])))
+        for ix, row in enumerate(negative_mask_batch):
+            row[:nonzeros[ix]] = 1
+        data['negative_masks'] = negative_mask_batch
 
         data['gts'] = gts # all ground truth captions of each images
         data['bounds'] = {'it_pos_now': self.iterators[split], 'it_max': len(self.split_ix[split]), 'wrapped': wrapped}
@@ -196,27 +235,8 @@ class DataLoader(data.Dataset):
         """This function returns a tuple that is further passed to collate_fn
         """
         ix = index #self.split_ix[index]
-        if self.use_att:
-            att_feat = np.load(os.path.join(self.input_att_dir, str(self.info['images'][ix]['id']) + '.npz'))['feat']
-            # Reshape to K x C
-            att_feat = att_feat.reshape(-1, att_feat.shape[-1])
-            if self.norm_att_feat:
-                att_feat = att_feat / np.linalg.norm(att_feat, 2, 1, keepdims=True)
-            if self.use_box:
-                box_feat = np.load(os.path.join(self.input_box_dir, str(self.info['images'][ix]['id']) + '.npy'))
-                # devided by image width and height
-                x1,y1,x2,y2 = np.hsplit(box_feat, 4)
-                h,w = self.info['images'][ix]['height'], self.info['images'][ix]['width']
-                box_feat = np.hstack((x1/w, y1/h, x2/w, y2/h, (x2-x1)*(y2-y1)/(w*h))) # question? x2-x1+1??
-                if self.norm_box_feat:
-                    box_feat = box_feat / np.linalg.norm(box_feat, 2, 1, keepdims=True)
-                att_feat = np.hstack([att_feat, box_feat])
-                # sort the features by the size of boxes
-                att_feat = np.stack(sorted(att_feat, key=lambda x:x[-1], reverse=True))
-        else:
-            att_feat = np.zeros((1,1,1))
         return (np.load(os.path.join(self.input_fc_dir, str(self.info['images'][ix]['id']) + '.npy')),
-                att_feat,
+                np.load(os.path.join(self.input_att_dir, str(self.info['images'][ix]['id']) + '.npy')),
                 ix)
 
     def __len__(self):
@@ -279,7 +299,7 @@ class BlobFetcher():
         self.dataloader.iterators[self.split] = ri_next
 
         return ix, wrapped
-    
+
     def get(self):
         if not hasattr(self, 'split_loader'):
             self.reset()

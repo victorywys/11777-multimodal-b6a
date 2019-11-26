@@ -15,11 +15,15 @@ from .OldModel import ShowAttendTellModel, AllImgModel
 from .AttModel import *
 from .TransformerModel import TransformerModel
 
+from .SpeakerListenerModel import SpeakerListenerModel
+from .GDiscriminator import GDiscriminator
+from .EDiscriminator import EDiscriminator
+
 def setup(opt):
-    
+
     if opt.caption_model == 'fc':
         model = FCModel(opt)
-    if opt.caption_model == 'show_tell':
+    elif opt.caption_model == 'show_tell':
         model = ShowTellModel(opt)
     # Att2in model in self-critical
     elif opt.caption_model == 'att2in':
@@ -47,14 +51,24 @@ def setup(opt):
     # Transformer
     elif opt.caption_model == 'transformer':
         model = TransformerModel(opt)
+    elif opt.caption_model == 'speakerlistener':
+        model = SpeakerListenerModel(opt)
+    elif opt.caption_model == 'gdiscriminator':
+        model = GDiscriminator(opt)
+    elif opt.caption_model == 'ediscriminator':
+        model = EDiscriminator(opt)
     else:
         raise Exception("Caption model not supported: {}".format(opt.caption_model))
 
     # check compatibility if training is continued from previously saved model
     if vars(opt).get('start_from', None) is not None:
-        # check if all necessary files exist 
+        # check if all necessary files exist
         assert os.path.isdir(opt.start_from)," %s must be a a path" % opt.start_from
         assert os.path.isfile(os.path.join(opt.start_from,"infos_"+opt.id+".pkl")),"infos.pkl file does not exist in path %s"%opt.start_from
-        model.load_state_dict(torch.load(os.path.join(opt.start_from, 'model.pth')))
-
+        if opt.caption_model == "gdiscriminator":
+            model.load_state_dict(torch.load(os.path.join(opt.start_from, 'gd_model.pth')))
+        elif opt.caption_model == "ediscriminator":
+            model.load_state_dict(torch.load(os.path.join(opt.start_from, 'ed_model.pth')))
+        else:
+            model.load_state_dict(torch.load(os.path.join(opt.start_from, 'model.pth')))
     return model

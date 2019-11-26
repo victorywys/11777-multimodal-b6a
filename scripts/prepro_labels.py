@@ -13,13 +13,13 @@ Output: a json file and an hdf5 file
 The hdf5 file contains several fields:
 /images is (N,3,256,256) uint8 array of raw image data in RGB format
 /labels is (M,max_length) uint32 array of encoded labels, zero padded
-/label_start_ix and /label_end_ix are (N,) uint32 arrays of pointers to the 
+/label_start_ix and /label_end_ix are (N,) uint32 arrays of pointers to the
   first and last indices (in range 1..M) of labels for each image
 /label_length stores the length of the sequence for each of the M sequences
 
 The json file has a dict that contains:
 - an 'ix_to_word' field storing the vocab in form {ix:'word'}, where ix is 1-indexed
-- an 'images' field that is a list holding auxiliary information for each image, 
+- an 'images' field that is a list holding auxiliary information for each image,
   such as in particular the 'split' it was assigned to.
 """
 
@@ -108,9 +108,29 @@ def encode_captions(imgs, params, wtoi):
     label_start_ix = np.zeros(N, dtype='uint32') # note: these will be one-indexed
     label_end_ix = np.zeros(N, dtype='uint32')
     label_length = np.zeros(M, dtype='uint32')
+    img_start_ix = np.zeros(N, dtype='uint32')
+    img_end_ix = np.zeros(N, dtype='uint32')
     caption_counter = 0
     counter = 1
-    for i,img in enumerate(imgs):
+    current_img_id = 0
+    box_num_of_current_img = 0
+    current_img_start_id = 0
+
+    box_num_stat = [0 for i in range(13)]
+    for i, img in enumerate(imgs):
+        img_id = img['image_id']
+        if img_id != current_img_id:
+#            assert box_num_of_current_img != 1, 'error: some image has only one bounding box'
+            box_num_stat[box_num_of_current_img] += 1
+            for t in range(current_img_start_id, i):
+                img_start_ix[t] = current_img_start_id
+                img_end_ix[t] = i - 1
+            current_img_id = img_id
+            box_num_of_current_img = 1
+            current_img_start_id = i
+        else:
+            box_num_of_current_img += 1
+
         n = len(img['final_captions'])
         assert n > 0, 'error: some image has no captions'
 
@@ -132,15 +152,18 @@ def encode_captions(imgs, params, wtoi):
     L = np.concatenate(label_arrays, axis=0) # put all the labels together
     assert L.shape[0] == M, 'lengths don\'t match? that\'s weird'
     assert np.all(label_length > 0), 'error: some caption had no words?'
+    print("distribution of box numbers for a single image:")
+
+    for i in range(1, 13):
+        print("%d:\t%d" % (i, box_num_stat[i]))
 
     print('encoded captions to array of size ', L.shape)
-    return L, label_start_ix, label_end_ix, label_length
-
+    return L, label_start_ix, label_end_ix, label_length, img_start_ix, img_end_ix
 
 def main(params):
 
     import sys
-    sys.path.append('/home/gift/777/refer')
+    sys.path.append('/usr0/home/yansenwa/11777/refer2/refer')
     from refer import REFER
 
     refer = REFER(params['input_json'], params['dataset'], params['splitBy'])
@@ -151,8 +174,10 @@ def main(params):
 
     seed(123) # make reproducible
 
+    refs.sort(key=lambda x:x['image_id'])
+
     # encode captions in large arrays, ready to ship to hdf5 file
-    L, label_start_ix, label_end_ix, label_length = encode_captions(refs, params, wtoi)
+    L, label_start_ix, label_end_ix, label_length, img_start_ix, img_end_ix = encode_captions(refs, params, wtoi)
 
     # create output h5 file
     N = len(refs)
@@ -161,6 +186,8 @@ def main(params):
     f_lb.create_dataset("label_start_ix", dtype='uint32', data=label_start_ix)
     f_lb.create_dataset("label_end_ix", dtype='uint32', data=label_end_ix)
     f_lb.create_dataset("label_length", dtype='uint32', data=label_length)
+    f_lb.create_dataset("img_start_ix", dtype='uint32', data=img_start_ix)
+    f_lb.create_dataset("img_end_ix", dtype='uint32', data=img_end_ix)
     f_lb.close()
 
     # create output json file

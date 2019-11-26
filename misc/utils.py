@@ -5,6 +5,7 @@ from __future__ import print_function
 import collections
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 import torch.optim as optim
 
@@ -51,6 +52,41 @@ class RewardCriterion(nn.Module):
 
         return output
 
+class SpeakerHingeCriterion(nn.Module):
+    def __init__(self, threshold=0.1):
+        super(SpeakerHingeCriterion, self).__init__()
+        self.threshold = threshold
+
+    def forward(self, pos_gen, neg_gen, pos_label, pos_mask, neg_label, neg_mask):
+        pos_label = pos_label[:, :pos_gen.size(1)]
+        pos_mask = pos_mask[:, :pos_gen.size(1)]
+        neg_label = neg_label[:, :pos_gen.size(1)]
+        neg_mask = neg_mask[:, :pos_gen.size(1)]
+
+        PGPL = -pos_gen.gather(2, pos_label.unsqueeze(2)).squeeze(2) * pos_mask
+        PGPL = torch.sum(PGPL) / torch.sum(pos_mask)
+        PGNL = -pos_gen.gather(2, neg_label.unsqueeze(2)).squeeze(2) * neg_mask
+        PGNL = torch.sum(PGNL) / torch.sum(neg_mask)
+        NGPL = -neg_gen.gather(2, pos_label.unsqueeze(2)).squeeze(2) * pos_mask
+        NGPL = torch.sum(NGPL) / torch.sum(pos_mask)
+        return torch.clamp(self.threshold + PGNL - PGPL, min=0) + torch.clamp(self.threshold + NGPL - PGPL, min=0)
+
+class ListenerHingeCriterion(nn.Module):
+    def __init__(self, threshold=0.1):
+        super(ListenerHingeCriterion, self).__init__()
+        self.threshold = threshold
+
+    def forward(self, pos_img, neg_img, pos_seq, neg_seq):
+        pos_img = F.normalize(pos_img)
+        neg_img = F.normalize(neg_img)
+        pos_seq = F.normalize(pos_seq)
+        neg_seq = F.normalize(neg_seq)
+        dot = lambda x, y: torch.mean(torch.sum(x * y, -1))
+        PGPL = dot(pos_img, pos_seq)
+        PGNL = dot(pos_img, neg_seq)
+        NGPL = dot(neg_img, pos_seq)
+        return (torch.clamp(self.threshold + PGNL - PGPL, min=0) + torch.clamp(self.threshold + NGPL - PGPL, min=0))
+
 class LanguageModelCriterion(nn.Module):
     def __init__(self):
         super(LanguageModelCriterion, self).__init__()
@@ -75,7 +111,7 @@ class LabelSmoothing(nn.Module):
         self.smoothing = smoothing
         # self.size = size
         self.true_dist = None
-        
+
     def forward(self, input, target, mask):
         # truncate to the same size
         target = target[:, :input.size(1)]
@@ -97,6 +133,24 @@ class LabelSmoothing(nn.Module):
         # self.true_dist = true_dist
         return (self.criterion(input, true_dist).sum(1) * mask).sum() / mask.sum()
 
+class GDiscriminatorCriterion(nn.Module):
+    def __init__(self):
+        super(GDiscriminatorCriterion, self).__init__()
+
+    def forward(self, pred, label):
+         output = -pred.gather(1, label.unsqueeze(1)).squeeze(1)
+         output = output.mean()
+         return output
+
+class EDiscriminatorCriterion(nn.Module):
+    def __init__(self):
+        super(EDiscriminatorCriterion, self).__init__()
+
+    def forward(self, pred, label):
+         output = -pred.gather(1, label.unsqueeze(1)).squeeze(1)
+         output = output.mean()
+         return output
+
 def set_lr(optimizer, lr):
     for group in optimizer.param_groups:
         group['lr'] = lr
@@ -108,7 +162,8 @@ def get_lr(optimizer):
 def clip_gradient(optimizer, grad_clip):
     for group in optimizer.param_groups:
         for param in group['params']:
-            param.grad.data.clamp_(-grad_clip, grad_clip)
+            if not param.grad is None:
+                param.grad.data.clamp_(-grad_clip, grad_clip)
 
 def build_optimizer(params, opt):
     if opt.optim == 'rmsprop':
@@ -136,7 +191,7 @@ class NoamOpt(object):
         self.factor = factor
         self.model_size = model_size
         self._rate = 0
-        
+
     def step(self):
         "Update parameters and rate"
         self._step += 1
@@ -145,7 +200,7 @@ class NoamOpt(object):
             p['lr'] = rate
         self._rate = rate
         self.optimizer.step()
-        
+
     def rate(self, step = None):
         "Implement `lrate` above"
         if step is None:
@@ -163,7 +218,7 @@ class ReduceLROnPlateau(object):
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode, factor, patience, verbose, threshold, threshold_mode, cooldown, min_lr, eps)
         self.optimizer = optimizer
         self.current_lr = get_lr(optimizer)
-        
+
     def step(self):
         "Update parameters and rate"
         self.optimizer.step()
@@ -189,7 +244,7 @@ class ReduceLROnPlateau(object):
             self.scheduler._init_is_better(mode=self.scheduler.mode, threshold=self.scheduler.threshold, threshold_mode=self.scheduler.threshold_mode)
             self.optimizer.load_state_dict(state_dict['optimizer_state_dict'])
             # current_lr is actually useless in this case
-        
+
     def rate(self, step = None):
         "Implement `lrate` above"
         if step is None:
@@ -200,10 +255,10 @@ class ReduceLROnPlateau(object):
 
     def __getattr__(self, name):
         return getattr(self.optimizer, name)
-        
+
 def get_std_opt(model, factor=1, warmup=2000):
     # return NoamOpt(model.tgt_embed[0].d_model, 2, 4000,
     #         torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
     return NoamOpt(model.model.tgt_embed[0].d_model, factor, warmup,
             torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
-    
+

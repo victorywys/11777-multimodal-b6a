@@ -14,18 +14,22 @@ def parse_opt():
     parser.add_argument('--input_label_h5', type=str, default='data/coco_label.h5',
                     help='path to the h5file containing the preprocessed dataset')
     parser.add_argument('--start_from', type=str, default=None,
-                    help="""continue training from saved model at this path. Path must contain files saved by previous training process: 
+                    help="""continue training from saved model at this path. Path must contain files saved by previous training process:
                         'infos.pkl'         : configuration;
                         'checkpoint'        : paths to model file(s) (created by tf).
                                               Note: this file contains absolute paths, be careful when moving files around;
                         'model.ckpt-*'      : file(s) with model definition (created by tf)
                     """)
+    parser.add_argument('--discriminator_start_from', type=str, default=None,
+                    help='')
     parser.add_argument('--cached_tokens', type=str, default='coco-train-idxs',
                     help='Cached token file for calculating cider score during self critical training.')
 
     # Model settings
+    parser.add_argument('--train_mode', type=str, default="pretrain",
+                    help='pretrain, discriminator, generator')
     parser.add_argument('--caption_model', type=str, default="show_tell",
-                    help='show_tell, show_attend_tell, all_img, fc, att2in, att2in2, att2all2, adaatt, adaattmo, topdown, stackatt, denseatt, transformer')
+                    help='show_tell, show_attend_tell, all_img, fc, att2in, att2in2, att2all2, adaatt, adaattmo, topdown, stackatt, denseatt, transformer, SLD')
     parser.add_argument('--rnn_size', type=int, default=512,
                     help='size of the rnn in number of hidden nodes in each layer')
     parser.add_argument('--num_layers', type=int, default=1,
@@ -42,7 +46,10 @@ def parse_opt():
                     help='2048 for resnet, 512 for vgg')
     parser.add_argument('--logit_layers', type=int, default=1,
                     help='number of layers in the RNN')
-
+    parser.add_argument('--listener_embedding_size', type=int, default=512,
+                    help='the embedding size for image and labels in the listener')
+    parser.add_argument('--listener_num_layers', type=int, default=2,
+                    help='number of layers to get the embeddings in the listener')
 
     parser.add_argument('--use_bn', type=int, default=0,
                     help='If 1, then do batch_normalization first in att_embed, if 2 then do bn both in the beginning and the end of att_embed')
@@ -76,11 +83,11 @@ def parse_opt():
                     help='what update to use? rmsprop|sgd|sgdmom|adagrad|adam')
     parser.add_argument('--learning_rate', type=float, default=4e-4,
                     help='learning rate')
-    parser.add_argument('--learning_rate_decay_start', type=int, default=-1, 
+    parser.add_argument('--learning_rate_decay_start', type=int, default=-1,
                     help='at what iteration to start decaying learning rate? (-1 = dont) (in epoch)')
-    parser.add_argument('--learning_rate_decay_every', type=int, default=3, 
+    parser.add_argument('--learning_rate_decay_every', type=int, default=3,
                     help='every how many iterations thereafter to drop LR?(in epoch)')
-    parser.add_argument('--learning_rate_decay_rate', type=float, default=0.8, 
+    parser.add_argument('--learning_rate_decay_rate', type=float, default=0.8,
                     help='every how many iterations thereafter to drop LR?(in epoch)')
     parser.add_argument('--optim_alpha', type=float, default=0.9,
                     help='alpha for adam')
@@ -91,13 +98,13 @@ def parse_opt():
     parser.add_argument('--weight_decay', type=float, default=0,
                     help='weight_decay')
 
-    parser.add_argument('--scheduled_sampling_start', type=int, default=-1, 
+    parser.add_argument('--scheduled_sampling_start', type=int, default=-1,
                     help='at what iteration to start decay gt probability')
-    parser.add_argument('--scheduled_sampling_increase_every', type=int, default=5, 
+    parser.add_argument('--scheduled_sampling_increase_every', type=int, default=5,
                     help='every how many iterations thereafter to gt probability')
-    parser.add_argument('--scheduled_sampling_increase_prob', type=float, default=0.05, 
+    parser.add_argument('--scheduled_sampling_increase_prob', type=float, default=0.05,
                     help='How much to update the prob')
-    parser.add_argument('--scheduled_sampling_max_prob', type=float, default=0.25, 
+    parser.add_argument('--scheduled_sampling_max_prob', type=float, default=0.25,
                     help='Maximum scheduled sampling prob.')
 
 
@@ -111,9 +118,9 @@ def parse_opt():
     parser.add_argument('--language_eval', type=int, default=0,
                     help='Evaluate language as well (1 = yes, 0 = no)? BLEU/CIDEr/METEOR/ROUGE_L? requires coco-caption code from Github.')
     parser.add_argument('--losses_log_every', type=int, default=25,
-                    help='How often do we snapshot losses, for inclusion in the progress dump? (0 = disable)')       
+                    help='How often do we snapshot losses, for inclusion in the progress dump? (0 = disable)')
     parser.add_argument('--load_best_score', type=int, default=1,
-                    help='Do we load previous best score when resuming training.')       
+                    help='Do we load previous best score when resuming training.')
 
     # misc
     parser.add_argument('--id', type=str, default='',
@@ -139,7 +146,7 @@ def parse_opt():
                     help='')
 
     parser.add_argument('--reduce_on_plateau', action='store_true',
-                    help='')
+                    help='learning_rate_decay')
 
     args = parser.parse_args()
 

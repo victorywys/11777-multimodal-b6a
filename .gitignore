@@ -2,3 +2,6 @@ log/
 data/
 cider/
 coco-caption
+*.pyc
+checkpoint/
+screenlog.*
