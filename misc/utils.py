@@ -64,12 +64,12 @@ class SpeakerHingeCriterion(nn.Module):
         neg_mask = neg_mask[:, :pos_gen.size(1)]
 
         PGPL = -pos_gen.gather(2, pos_label.unsqueeze(2)).squeeze(2) * pos_mask
-        PGPL = torch.sum(PGPL) / torch.sum(pos_mask)
+        PGPL = torch.sum(PGPL, -1) / torch.sum(pos_mask, -1).unsqueeze(-1)
         PGNL = -pos_gen.gather(2, neg_label.unsqueeze(2)).squeeze(2) * neg_mask
-        PGNL = torch.sum(PGNL) / torch.sum(neg_mask)
+        PGNL = torch.sum(PGNL, -1) / torch.sum(neg_mask, -1).unsqueeze(-1)
         NGPL = -neg_gen.gather(2, pos_label.unsqueeze(2)).squeeze(2) * pos_mask
-        NGPL = torch.sum(NGPL) / torch.sum(pos_mask)
-        return torch.clamp(self.threshold + PGNL - PGPL, min=0) + torch.clamp(self.threshold + NGPL - PGPL, min=0)
+        NGPL = torch.sum(NGPL, -1) / torch.sum(pos_mask, -1).unsqueeze(-1)
+        return torch.mean(torch.clamp(self.threshold + PGNL - PGPL, min=0)) + torch.mean(torch.clamp(self.threshold + NGPL - PGPL, min=0))
 
 class ListenerHingeCriterion(nn.Module):
     def __init__(self, threshold=0.1):
@@ -81,11 +81,11 @@ class ListenerHingeCriterion(nn.Module):
         neg_img = F.normalize(neg_img)
         pos_seq = F.normalize(pos_seq)
         neg_seq = F.normalize(neg_seq)
-        dot = lambda x, y: torch.mean(torch.sum(x * y, -1))
+        dot = lambda x, y: torch.sum(x * y, -1)
         PGPL = dot(pos_img, pos_seq)
         PGNL = dot(pos_img, neg_seq)
         NGPL = dot(neg_img, pos_seq)
-        return (torch.clamp(self.threshold + PGNL - PGPL, min=0) + torch.clamp(self.threshold + NGPL - PGPL, min=0))
+        return torch.mean(torch.clamp(self.threshold + PGNL - PGPL, min=0)) + torch.mean(torch.clamp(self.threshold + NGPL - PGPL, min=0))
 
 class LanguageModelCriterion(nn.Module):
     def __init__(self):
@@ -150,6 +150,14 @@ class EDiscriminatorCriterion(nn.Module):
          output = -pred.gather(1, label.unsqueeze(1)).squeeze(1)
          output = output.mean()
          return output
+
+class JointCriterion(nn.Module):
+    def __init__(self):
+        super(JointCriterion, self).__init__()
+
+    def forward(self, pred):
+        return torch.mean(-pred[:, 0])
+
 
 def set_lr(optimizer, lr):
     for group in optimizer.param_groups:

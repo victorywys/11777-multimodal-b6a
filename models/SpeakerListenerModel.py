@@ -50,13 +50,13 @@ class SpeakerListenerModel(CaptionModel):
 
         self.ss_prob = 0.0 # Schedule sampling probability
 
-    def _forward(self, fc_feats, att_feats, seq, att_masks=None, get_emb_only=False):
+    def _forward(self, fc_feats, att_feats, seq, att_masks=None, get_emb_only=False, use_gumbel=False, hard_gumbel=False):
         if get_emb_only:
             label_emb = self.get_label_emb(seq)
             img_emb = self.speaker.get_img_embedding(fc_feats, att_feats, seq, att_masks)
             return label_emb, img_emb
         image_emb = self.speaker.get_img_embedding(fc_feats, att_feats, seq, att_masks)
-        speaker_gen = self.speaker.forward_with_embedding(image_emb, fc_feats, att_feats, seq, att_masks)
+        speaker_gen = self.speaker.forward_with_embedding(image_emb, fc_feats, att_feats, seq, att_masks, use_gumbel, hard_gumbel)
         seq_len = torch.sum(1 - torch.eq(seq, 0), 1) + 1
         label_emb = self.listener(seq, seq_len)
         return speaker_gen, image_emb, label_emb
@@ -186,11 +186,11 @@ class Speaker(CaptionModel):
         x = self.__getattr__("img_bn_%d" % (self.listener_num_layers))(x)
         return x
 
-    def forward_with_embedding(self, xe, fc_feats, att_feats, seq, att_masks=None):
+    def forward_with_embedding(self, xe, fc_feats, att_feats, seq, att_masks=None, use_gumbel=False, hard_gumbel=False):
         batch_size = fc_feats.size(0)
         state = self.init_hidden(batch_size)
         outputs = []
-
+        gumbel_outputs = []
         for i in range(seq.size(1)):
             if i == 0:
                 xt = self.img_embed(torch.cat((fc_feats, xe), -1))
@@ -214,22 +214,34 @@ class Speaker(CaptionModel):
                     break
                 xt = self.embed(it)
 
-            output, state = self.core(xt, state)
-            output = F.log_softmax(self.logit(output), dim=1)
-            outputs.append(output)
+                output, state = self.core(xt, state)
+                logits = self.logit(output)
+                output = F.log_softmax(logits, dim=1)
+                outputs.append(output)
+                if use_gumbel:
+                    gumbel_output = F.gumbel_softmax(logits, hard=hard_gumbel)
+                    gumbel_outputs.append(gumbel_output)
 
-#        print(torch.tensor(outputs).size())
+
         before_padding = torch.cat([_.unsqueeze(1) for _ in outputs[1:]], 1).contiguous()
         batch_len = before_padding.size(1)
         if batch_len != self.seq_length + 1:
             ret = torch.cat((before_padding, torch.zeros(batch_size, self.seq_length - batch_len + 1, self.vocab_size + 1).cuda()), 1)
         else:
             ret = before_padding
+        if use_gumbel:
+            gumbel_before_padding = torch.cat([_.unsqueeze(1) for _ in gumbel_outputs[1:]], 1).contiguous()
+            batch_len = before_padding.size(1)
+            if batch_len != self.seq_length + 1:
+                gumbel_ret = torch.cat((gumbel_before_padding, torch.zeros(batch_size, self.seq_length - batch_len + 1, self.vocab_size + 1).cuda()), 1)
+            else:
+                gumbel_ret = gumbel_before_padding
+            return ret, gumbel_ret
         return ret
 
-    def _forward(self, fc_feats, att_feats, seq, att_masks=None):
+    def _forward(self, fc_feats, att_feats, seq, att_masks=None, use_gumbel=False, hard_gumbel=False):
         xe = self.get_img_embedding(fc_feats, att_feats, seq, att_masks)
-        ret = self.foward_with_embedding(xe, fc_feats, att_feats, seq, att_masks)
+        ret = self.foward_with_embedding(xe, fc_feats, att_feats, seq, att_masks, use_gumbel, hard_gumbel)
         return ret
 
     def get_logprobs_state(self, it, state):

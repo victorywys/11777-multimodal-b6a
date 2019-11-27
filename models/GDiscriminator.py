@@ -78,13 +78,25 @@ class GDiscriminator(nn.Module):
             return weight.new_zeros(self.num_layers, bsz, self.rnn_size)
 
 
-    def forward(self, fc_feats, att_feats, seq, att_masks=None):
-        batch_size, max_label_len = seq.size()
+    def forward(self, fc_feats, att_feats, seq, att_masks=None, use_prob=False, label_len=None):
+        # if use_prob:
+        #    seq: batch_size * seq_length
+        # else:
+        #    seq: batch_size * seq_length * vocab_size
+        if use_prob:
+            embeds = self.embed.weight # vocab_size * embedding_size
+            batch_size, max_label_len, _ = seq.size()
+        else:
+            batch_size, max_label_len = seq.size()
         state = self.init_hidden(batch_size)
-        label_len = torch.sum(1 - torch.eq(seq, 0), 1)
+        if label_len is None:
+            label_len = torch.sum(1 - torch.eq(seq, 0), 1)
         outputs = []
         for i in range(max_label_len):
-            xt = self.embed(seq[:, i])
+            if use_prob:
+                xt = torch.matmul(seq[:, i], embeds)
+            else:
+                xt = self.embed(seq[:, i])
             output, state = self.core(xt, state)
             outputs.append(output)
         sent_embed = []

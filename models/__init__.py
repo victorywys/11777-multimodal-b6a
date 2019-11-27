@@ -18,6 +18,7 @@ from .TransformerModel import TransformerModel
 from .SpeakerListenerModel import SpeakerListenerModel
 from .GDiscriminator import GDiscriminator
 from .EDiscriminator import EDiscriminator
+from .Discriminator import Discriminator
 
 def setup(opt):
 
@@ -57,6 +58,8 @@ def setup(opt):
         model = GDiscriminator(opt)
     elif opt.caption_model == 'ediscriminator':
         model = EDiscriminator(opt)
+    elif opt.caption_model == 'discriminator':
+        model = Discriminator(opt)
     else:
         raise Exception("Caption model not supported: {}".format(opt.caption_model))
 
@@ -69,6 +72,9 @@ def setup(opt):
             model.load_state_dict(torch.load(os.path.join(opt.start_from, 'gd_model.pth')))
         elif opt.caption_model == "ediscriminator":
             model.load_state_dict(torch.load(os.path.join(opt.start_from, 'ed_model.pth')))
+        elif opt.caption_model == "discriminator":
+            model.gd.load_state_dict(torch.load(os.path.join(opt.discriminator_start_from, 'gd_model.pth')))
+            model.ed.load_state_dict(torch.load(os.path.join(opt.discriminator_start_from, 'ed_model.pth')))
         else:
             model.load_state_dict(torch.load(os.path.join(opt.start_from, 'model.pth')))
     return model
