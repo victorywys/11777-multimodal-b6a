@@ -64,11 +64,11 @@ class SpeakerHingeCriterion(nn.Module):
         neg_mask = neg_mask[:, :pos_gen.size(1)]
 
         PGPL = -pos_gen.gather(2, pos_label.unsqueeze(2)).squeeze(2) * pos_mask
-        PGPL = torch.sum(PGPL, -1) / torch.sum(pos_mask, -1).unsqueeze(-1)
+        PGPL = torch.sum(PGPL, -1) / torch.sum(pos_mask, -1)
         PGNL = -pos_gen.gather(2, neg_label.unsqueeze(2)).squeeze(2) * neg_mask
-        PGNL = torch.sum(PGNL, -1) / torch.sum(neg_mask, -1).unsqueeze(-1)
+        PGNL = torch.sum(PGNL, -1) / torch.sum(neg_mask, -1)
         NGPL = -neg_gen.gather(2, pos_label.unsqueeze(2)).squeeze(2) * pos_mask
-        NGPL = torch.sum(NGPL, -1) / torch.sum(pos_mask, -1).unsqueeze(-1)
+        NGPL = torch.sum(NGPL, -1) / torch.sum(pos_mask, -1)
         return torch.mean(torch.clamp(self.threshold + PGNL - PGPL, min=0)) + torch.mean(torch.clamp(self.threshold + NGPL - PGPL, min=0))
 
 class ListenerHingeCriterion(nn.Module):

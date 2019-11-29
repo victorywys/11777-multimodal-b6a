@@ -18,7 +18,7 @@ import misc.utils as utils
 def language_eval(dataset, preds, model_id, split):
     import sys
     sys.path.append("coco-caption")
-    annFile = 'coco-caption/annotations/refcoco_val.json'
+    annFile = 'coco-caption/annotations/refcoco_ori_val.json'
     from pycocotools.coco import COCO
     from pycocoevalcap.eval import COCOEvalCap
 

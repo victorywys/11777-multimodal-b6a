@@ -1,0 +1,9 @@
+21d20
+< from .Discriminator import Discriminator
+61,62d59
+<     elif opt.caption_model == 'discriminator':
+<         model = Discriminator(opt)
+75,77d71
+<         elif opt.caption_model == "discriminator":
+<             model.gd.load_state_dict(torch.load(os.path.join(opt.discriminator_start_from, 'gd_model.pth')))
+<             model.ed.load_state_dict(torch.load(os.path.join(opt.discriminator_start_from, 'ed_model.pth')))

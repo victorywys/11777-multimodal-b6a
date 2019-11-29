@@ -73,8 +73,16 @@ def setup(opt):
         elif opt.caption_model == "ediscriminator":
             model.load_state_dict(torch.load(os.path.join(opt.start_from, 'ed_model.pth')))
         elif opt.caption_model == "discriminator":
-            model.gd.load_state_dict(torch.load(os.path.join(opt.discriminator_start_from, 'gd_model.pth')))
-            model.ed.load_state_dict(torch.load(os.path.join(opt.discriminator_start_from, 'ed_model.pth')))
+            if opt.continue_mode == "separate":
+                model.gd.load_state_dict(torch.load(os.path.join(opt.discriminator_start_from, 'gd_model.pth')))
+                model.ed.load_state_dict(torch.load(os.path.join(opt.discriminator_start_from, 'ed_model.pth')))
+            elif opt.continue_mode == "joint":
+                model.load_state_dict(torch.load(os.path.join(opt.discriminator_start_from, 'dis_model.pth')))
+        elif opt.caaption_model == "speakerlistener":
+            if opt.continue_mode == "separate":
+                model.load_state_dict(torch.load(os.path.join(opt.start, 'model.pth')))
+            else:
+                model.load_state_dict(torch.load(os.path.join(opt.start, 'gen_model.pth')))
         else:
             model.load_state_dict(torch.load(os.path.join(opt.start_from, 'model.pth')))
     return model

@@ -54,7 +54,7 @@ def pretrain(opt):
         with open(os.path.join(opt.start_from, 'infos_'+opt.id+'.pkl')) as f:
             infos = cPickle.load(f)
             saved_model_opt = infos['opt']
-            need_be_same=["caption_model", "rnn_type", "rnn_size", "num_layers"]
+            need_be_same=["rnn_type", "rnn_size", "num_layers"]
             for checkme in need_be_same:
                 assert vars(saved_model_opt)[checkme] == vars(opt)[checkme], "Command line argument and saved model disagree on '%s' " % checkme
 
@@ -166,7 +166,8 @@ def pretrain(opt):
             lossS2 = speaker_hinge_crit(speaker_gen, negative_speaker_gen, labels[:,1:], masks[:,1:], negative_labels[:, 1:], negative_masks[:, 1:])
             lossL = listener_hinge_crit(image_emb, negative_image_emb, seq_emb, negative_seq_emb)
 
-            loss = lossS1 + lossS2 + lossL
+#            loss = lossS1 + lossS2 + lossL
+            loss = lossS1
         else:
             gen_result, sample_logprobs = dp_model(fc_feats, att_feats, att_masks, opt={'sample_max':0}, mode='sample')
             reward = get_self_critical_reward(dp_model, fc_feats, att_feats, att_masks, data, gen_result, opt)
@@ -682,15 +683,15 @@ def joint_training(opt):
         model = models.setup(opt).cuda()
     gen_model = model
     print(gen_model)
-    dp_gen_model = torch.nn.DataParallel(gen_model, device_ids=use_device)
-#    dp_gen_model = gen_model
+#    dp_gen_model = torch.nn.DataParallel(gen_model, device_ids=use_device)
+    dp_gen_model = gen_model
 
     tmp_opt = opt
     tmp_opt.caption_model = "discriminator"
     dis_model = models.setup(tmp_opt).cuda()
     print(dis_model)
-    dp_dis_model = torch.nn.DataParallel(dis_model, device_ids=use_device)
-#    dp_dis_model = dis_model
+#    dp_dis_model = torch.nn.DataParallel(dis_model, device_ids=use_device)
+    dp_dis_model = dis_model
 
     epoch_done = True
     # Assure in training mode
@@ -764,62 +765,92 @@ def joint_training(opt):
         gen_optimizer.zero_grad()
         dis_optimizer.zero_grad()
 
-        speaker_gen, image_emb, seq_emb = dp_gen_model(fc_feats, att_feats, labels, att_masks, use_gumbel=True, hard_gumbel=False)
-        speaker_gen, gumbel_output = speaker_gen
-        negative_speaker_gen, negative_image_emb, _  = dp_gen_model(fc_feats, negative_att_feats, labels, att_masks)
-        negative_seq_emb, negative_image_emb = dp_gen_model(fc_feats, negative_att_feats, labels, att_masks, get_emb_only=True)
+        if (iteration % opt.use_discriminator_loss_every == 0 and iteration != 0):
+        #use GAN to train.
+            speaker_gen, image_emb, seq_emb = dp_gen_model(fc_feats, att_feats, labels, att_masks, use_gumbel=True, hard_gumbel=False)
+            speaker_gen, gumbel_output = speaker_gen
+            negative_speaker_gen, negative_image_emb, _  = dp_gen_model(fc_feats, negative_att_feats, labels, att_masks)
+            negative_seq_emb, negative_image_emb = dp_gen_model(fc_feats, negative_att_feats, labels, att_masks, get_emb_only=True)
 
-        gd_data = []
-        ed_data = []
-        batch_size = labels.size()[0]
-        for i in range(batch_size):
-            gd_data.append((fc_feats[i, :], att_feats[i, :], one_hot(labels[i, 1:], opt.vocab_size + 1).to(torch.float), torch.sum(1 - torch.eq(labels[i, 1:], 0)), 0))
-            gd_data.append((fc_feats[i, :], att_feats[i, :], one_hot(negative_labels[i, 1:], opt.vocab_size + 1).to(torch.float), torch.sum(1 - torch.eq(negative_labels[i, 1:], 0)), 1))
-            gd_data.append((fc_feats[i, :], att_feats[i, :], gumbel_output[i, :], torch.sum(1 - torch.eq(torch.argmax(gumbel_output[i, :], -1), 0)), 2))
-            ed_data.append((fc_feats[i, :], att_feats[i, :], seq_emb[i, :], 0))
-            ed_data.append((fc_feats[i, :], att_feats[i, :], image_emb[i, :], 1))
-            ed_data.append((fc_feats[i, :], att_feats[i, :], negative_image_emb[i, :], 2))
-        random.shuffle(gd_data)
-        random.shuffle(ed_data)
-        gd_fc_feat = torch.stack([d[0] for d in gd_data])
-        gd_att_feat = torch.stack([d[1] for d in gd_data])
-        gd_seq = torch.stack([d[2] for d in gd_data])
-        gd_seq_length = torch.tensor([d[3] for d in gd_data]).cuda()
-        gd_label = torch.tensor([d[4] for d in gd_data]).cuda()
+            gd_data = []
+            ed_data = []
+            batch_size = labels.size()[0]
+            for i in range(batch_size):
+                gd_data.append((fc_feats[i, :], att_feats[i, :], one_hot(labels[i, 1:], opt.vocab_size + 1).to(torch.float), torch.sum(1 - torch.eq(labels[i, 1:], 0)), 0))
+                gd_data.append((fc_feats[i, :], att_feats[i, :], one_hot(negative_labels[i, 1:], opt.vocab_size + 1).to(torch.float), torch.sum(1 - torch.eq(negative_labels[i, 1:], 0)), 1))
+                gd_data.append((fc_feats[i, :], att_feats[i, :], gumbel_output[i, :], torch.sum(1 - torch.eq(torch.argmax(gumbel_output[i, :], -1), 0)), 2))
+                ed_data.append((fc_feats[i, :], att_feats[i, :], seq_emb[i, :], 0))
+                ed_data.append((fc_feats[i, :], att_feats[i, :], image_emb[i, :], 1))
+                ed_data.append((fc_feats[i, :], att_feats[i, :], negative_image_emb[i, :], 2))
+            random.shuffle(gd_data)
+            random.shuffle(ed_data)
+            gd_fc_feat = torch.stack([d[0] for d in gd_data])
+            gd_att_feat = torch.stack([d[1] for d in gd_data])
+            gd_seq = torch.stack([d[2] for d in gd_data])
+            gd_seq_length = torch.tensor([d[3] for d in gd_data]).cuda()
+            gd_label = torch.tensor([d[4] for d in gd_data]).cuda()
 
-        ed_fc_feat = torch.stack([d[0] for d in ed_data])
-        ed_att_feat = torch.stack([d[1] for d in ed_data])
-        ed_emb = torch.stack([d[2] for d in ed_data])
-        ed_label = torch.tensor([d[3] for d in ed_data]).cuda()
+            ed_fc_feat = torch.stack([d[0] for d in ed_data])
+            ed_att_feat = torch.stack([d[1] for d in ed_data])
+            ed_emb = torch.stack([d[2] for d in ed_data])
+            ed_label = torch.tensor([d[3] for d in ed_data]).cuda()
 
-        gd_pred = dp_dis_model(gd_fc_feat, gd_att_feat, gd_seq, dis_mode="gd", use_prob=True, label_len=gd_seq_length)
-        ed_pred = dp_dis_model(ed_fc_feat, ed_att_feat, ed_emb, dis_mode="ed")
+            gd_pred = dp_dis_model(gd_fc_feat, gd_att_feat, gd_seq, dis_mode="gd", use_prob=True, label_len=gd_seq_length)
+            ed_pred = dp_dis_model(ed_fc_feat, ed_att_feat, ed_emb, dis_mode="ed")
 
-        gen_loss = gen_crit[0](speaker_gen, labels[:, 1:], masks[:, 1:]) +\
-                gen_crit[1](speaker_gen, negative_speaker_gen, labels[:, 1:], masks[:, 1:], negative_labels[:, 1:], negative_masks[:, 1:]) +\
-                gen_crit[2](image_emb, negative_image_emb, seq_emb, negative_seq_emb) +\
-                gen_crit[3](gd_pred) +\
-                gen_crit[4](ed_pred)
-        gen_loss.backward(retain_graph=True)
-        utils.clip_gradient(gen_optimizer, opt.grad_clip)
-        gen_optimizer.step()
+            gen_loss = 2 * gen_crit[0](speaker_gen, labels[:, 1:], masks[:, 1:]) + 0.5 * (
+                    gen_crit[1](speaker_gen, negative_speaker_gen, labels[:, 1:], masks[:, 1:], negative_labels[:, 1:], negative_masks[:, 1:]) +\
+                    gen_crit[2](image_emb, negative_image_emb, seq_emb, negative_seq_emb) +\
+                    gen_crit[3](gd_pred) +\
+                    gen_crit[4](ed_pred))
 
-        dis_loss = dis_crit[0](gd_pred, gd_label) + dis_crit[1](ed_pred, ed_label)
-        dis_loss.backward()
-        utils.clip_gradient(dis_optimizer, opt.grad_clip)
-        dis_optimizer.step()
+            gen_loss.backward(retain_graph=True)
+            utils.clip_gradient(gen_optimizer, opt.grad_clip)
+            gen_optimizer.step()
 
-        G_loss = gen_loss.item()
-        D_loss = dis_loss.item()
-        train_loss = gen_loss + dis_loss
-        torch.cuda.synchronize()
-        end = time.time()
-        if not sc_flag:
-            print("iter {} (epoch {}), train_loss = {:.3f}, gen_loss = {:.3f}, dis_loss = {:.3f}, time/batch = {:.3f}" \
-                .format(iteration, epoch, train_loss, gen_loss, dis_loss, end - start))
+            dis_loss = dis_crit[0](gd_pred, gd_label) + dis_crit[1](ed_pred, ed_label)
+            dis_loss.backward()
+            utils.clip_gradient(dis_optimizer, opt.grad_clip)
+            dis_optimizer.step()
+            G_loss = gen_loss.item()
+            D_loss = dis_loss.item()
+            train_loss = G_loss + D_loss
+            torch.cuda.synchronize()
+            end = time.time()
+            if not sc_flag:
+                print("iter {} (epoch {}), train_loss = {:.3f}, gen_loss = {:.3f}, dis_loss = {:.3f}, time/batch = {:.3f}" \
+                    .format(iteration, epoch, train_loss, gen_loss, dis_loss, end - start))
+            else:
+                print("iter {} (epoch {}), avg_reward = {:.3f}, time/batch = {:.3f}" \
+                    .format(iteration, epoch, np.mean(reward[:,0]), end - start))
         else:
-            print("iter {} (epoch {}), avg_reward = {:.3f}, time/batch = {:.3f}" \
-                .format(iteration, epoch, np.mean(reward[:,0]), end - start))
+            #don't use GAN
+            speaker_gen, image_emb, seq_emb = dp_gen_model(fc_feats, att_feats, labels, att_masks)
+            negative_speaker_gen, negative_image_emb, _  = dp_gen_model(fc_feats, negative_att_feats, labels, att_masks)
+            negative_seq_emb, _ = dp_gen_model(fc_feats, att_feats, negative_labels, att_masks, get_emb_only=True)
+
+            loss1 = gen_crit[0](speaker_gen, labels[:, 1:], masks[:, 1:])
+            loss2 = gen_crit[1](speaker_gen, negative_speaker_gen, labels[:, 1:], masks[:, 1:], negative_labels[:, 1:], negative_masks[:, 1:])
+            loss3 = gen_crit[2](image_emb, negative_image_emb, seq_emb, negative_seq_emb)
+            gen_loss = 2 * loss1 + 0.5 * (loss2 + loss3)
+            gen_loss.backward()
+            utils.clip_gradient(gen_optimizer, opt.grad_clip)
+            gen_optimizer.step()
+
+            Gloss1 = loss1.item()
+            Gloss2 = loss2.item()
+            Gloss3 = loss3.item()
+            train_loss = gen_loss.item()
+            torch.cuda.synchronize()
+            end = time.time()
+            if not sc_flag:
+                print("iter {} (epoch {}), train_loss = {:.3f}, loss1 = {:.3f}, loss2 = {:.3f}, loss3={:.3f}, time/batch = {:.3f}" \
+                    .format(iteration, epoch, train_loss, Gloss1, Gloss2, Gloss3, end - start))
+            else:
+                print("iter {} (epoch {}), avg_reward = {:.3f}, time/batch = {:.3f}" \
+                    .format(iteration, epoch, np.mean(reward[:,0]), end - start))
+
+
 
         # Update the iteration and epoch
         iteration += 1

@@ -13,6 +13,8 @@ def parse_opt():
                     help='path to the directory containing the boxes of att feats')
     parser.add_argument('--input_label_h5', type=str, default='data/coco_label.h5',
                     help='path to the h5file containing the preprocessed dataset')
+    parser.add_argument('--continue_mode', type=str, default='separate',
+                    help='separate, joint')
     parser.add_argument('--start_from', type=str, default=None,
                     help="""continue training from saved model at this path. Path must contain files saved by previous training process:
                         'infos.pkl'         : configuration;
@@ -87,6 +89,8 @@ def parse_opt():
                     help='at what iteration to start decaying learning rate? (-1 = dont) (in epoch)')
     parser.add_argument('--learning_rate_decay_every', type=int, default=3,
                     help='every how many iterations thereafter to drop LR?(in epoch)')
+    parser.add_argument('--use_discriminator_loss_every', type=int, default=10,
+                    help='')
     parser.add_argument('--learning_rate_decay_rate', type=float, default=0.8,
                     help='every how many iterations thereafter to drop LR?(in epoch)')
     parser.add_argument('--optim_alpha', type=float, default=0.9,

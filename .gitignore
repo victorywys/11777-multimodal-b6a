@@ -3,5 +3,9 @@ data/
 cider/
 coco-caption
 *.pyc
+*_bak*
+*.bak
+*.diff
+*.out
 checkpoint/
 screenlog.*

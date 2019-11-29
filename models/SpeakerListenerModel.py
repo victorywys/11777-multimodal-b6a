@@ -214,19 +214,19 @@ class Speaker(CaptionModel):
                     break
                 xt = self.embed(it)
 
-                output, state = self.core(xt, state)
-                logits = self.logit(output)
-                output = F.log_softmax(logits, dim=1)
-                outputs.append(output)
-                if use_gumbel:
-                    gumbel_output = F.gumbel_softmax(logits, hard=hard_gumbel)
-                    gumbel_outputs.append(gumbel_output)
-
+            output, state = self.core(xt, state)
+            logits = self.logit(output)
+            output = F.log_softmax(logits, dim=1)
+            outputs.append(output)
+            if use_gumbel:
+                gumbel_output = F.gumbel_softmax(logits, 0.25, hard=hard_gumbel)
+                gumbel_outputs.append(gumbel_output)
 
         before_padding = torch.cat([_.unsqueeze(1) for _ in outputs[1:]], 1).contiguous()
         batch_len = before_padding.size(1)
         if batch_len != self.seq_length + 1:
             ret = torch.cat((before_padding, torch.zeros(batch_size, self.seq_length - batch_len + 1, self.vocab_size + 1).cuda()), 1)
+#            print(ret)
         else:
             ret = before_padding
         if use_gumbel:
@@ -236,6 +236,12 @@ class Speaker(CaptionModel):
                 gumbel_ret = torch.cat((gumbel_before_padding, torch.zeros(batch_size, self.seq_length - batch_len + 1, self.vocab_size + 1).cuda()), 1)
             else:
                 gumbel_ret = gumbel_before_padding
+#            print("ret:")
+#            for j in range(ret.size(1)):
+#                print(torch.argmax(ret, -1)[0,j], torch.exp(ret[0,j,torch.argmax(ret, -1)[0,j]]))
+#            print("gumbel_ret:")
+#            for j in range(ret.size(1)):
+#                print(torch.argmax(gumbel_ret, -1)[0, j], gumbel_ret[0,j,torch.argmax(gumbel_ret, -1)[0,j]])
             return ret, gumbel_ret
         return ret
 

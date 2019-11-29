@@ -101,7 +101,7 @@ class GDiscriminator(nn.Module):
             outputs.append(output)
         sent_embed = []
         for i in range(batch_size):
-            sent_embed.append(outputs[label_len[i]][i])
+            sent_embed.append(outputs[label_len[i]-1][i])
         emb = torch.stack(sent_embed)
 
         fc_after = F.dropout(F.relu(self.fc_norm(self.fc_linear(fc_feats))), p=0.1)

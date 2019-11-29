@@ -18,12 +18,12 @@ fi
 export CUDA_VISIBLE_DEVICES=2,3,4,5
 
 python2 train.py --id $id --caption_model SLD --train_mode joint \
-    --label_smoothing 0.0 \
+    --label_smoothing 0.0 --continue_mode joint \
     --input_json data/refcoco.json --input_label_h5 data/refcoco_label.h5 \
-    --input_fc_dir /usr0/home/yansenwa/mscoco_feature/boxes/bu_feature_gt/refcoco_unc/cocobu_ref_fc --input_att_dir /usr0/home/yansenwa/mscoco_feature/boxes/bu_feature_gt/refcoco_unc/cocobu_ref_att --start_from checkpoint/pretrain --discriminator_start_from checkpoint/discriminator\
+    --input_fc_dir /usr0/home/yansenwa/mscoco_feature/boxes/bu_feature_gt/refcoco_unc/cocobu_ref_fc --input_att_dir /usr0/home/yansenwa/mscoco_feature/boxes/bu_feature_gt/refcoco_unc/cocobu_ref_att --start_from checkpoint/final --discriminator_start_from checkpoint/final \
     --seq_per_img 3 --batch_size 25 --beam_size 1 --num_layers 6 --input_encoding_size 512 --rnn_size 2048 \
     --reduce_on_plateau --learning_rate_decay_start 0 --scheduled_sampling_start 0 --checkpoint_path checkpoint/final \
-    --save_checkpoint_every 2000 --language_eval 1 --val_images_use 5000 --max_epochs 15 --learning_rate 5e-4 | tee $ckpt_path/train.log 
+    --save_checkpoint_every 2000 --use_discriminator_loss_every 1 --language_eval 1 --val_images_use 5000 --max_epochs 15 --learning_rate 5e-4 | tee $ckpt_path/train.log 
 
 #python train.py --id $id --caption_model transformer --reduce_on_plateau \
 #    --input_json data/refcoco.json --input_label_h5 data/refcoco_label.h5 --cached_tokens refcoco-all-idxs \
