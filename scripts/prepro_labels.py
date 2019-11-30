@@ -108,9 +108,21 @@ def encode_captions(imgs, params, wtoi):
     label_start_ix = np.zeros(N, dtype='uint32') # note: these will be one-indexed
     label_end_ix = np.zeros(N, dtype='uint32')
     label_length = np.zeros(M, dtype='uint32')
+    img_start_ix = np.zeros(N, dtype='uint32')
+    img_end_ix = np.zeros(N, dtype='uint32')
     caption_counter = 0
     counter = 1
-    for i,img in enumerate(imgs):
+    current_img_id = 0
+    current_img_start_id = 0
+    for i, img in enumerate(imgs):
+        img_id = img['image_id']
+        if img_id != current_img_id:
+            for t in range(current_img_start_id, i):
+                img_start_ix[t] = current_img_start_id
+                img_end_ix[t] = i - 1
+            current_img_id = img_id
+            current_img_start_id = i
+
         n = len(img['final_captions'])
         assert n > 0, 'error: some image has no captions'
 
@@ -134,7 +146,7 @@ def encode_captions(imgs, params, wtoi):
     assert np.all(label_length > 0), 'error: some caption had no words?'
 
     print('encoded captions to array of size ', L.shape)
-    return L, label_start_ix, label_end_ix, label_length
+    return L, label_start_ix, label_end_ix, label_length, img_start_ix, img_end_ix
 
 
 def main(params):
@@ -145,6 +157,7 @@ def main(params):
 
     refer = REFER(params['input_json'], params['dataset'], params['splitBy'])
     refs = refer.loadRefs(refer.getRefIds())
+    refs.sort(key=lambda x: x['image_id'])
     vocab = build_vocab(refs, params)
     itow = {i + 1: w for i, w in enumerate(vocab)}  # a 1-indexed vocab translation table
     wtoi = {w: i + 1 for i, w in enumerate(vocab)}  # inverse table
@@ -152,7 +165,7 @@ def main(params):
     seed(123) # make reproducible
 
     # encode captions in large arrays, ready to ship to hdf5 file
-    L, label_start_ix, label_end_ix, label_length = encode_captions(refs, params, wtoi)
+    L, label_start_ix, label_end_ix, label_length, img_start_ix, img_end_ix = encode_captions(refs, params, wtoi)
 
     # create output h5 file
     N = len(refs)
@@ -161,6 +174,8 @@ def main(params):
     f_lb.create_dataset("label_start_ix", dtype='uint32', data=label_start_ix)
     f_lb.create_dataset("label_end_ix", dtype='uint32', data=label_end_ix)
     f_lb.create_dataset("label_length", dtype='uint32', data=label_length)
+    f_lb.create_dataset("img_start_ix", dtype='uint32', data=img_start_ix)
+    f_lb.create_dataset("img_end_ix", dtype='uint32', data=img_end_ix)
     f_lb.close()
 
     # create output json file

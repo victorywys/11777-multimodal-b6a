@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import torch.optim as optim
+import torch.nn.functional as F
 
 def if_use_att(caption_model):
     # Decide if load attention feature according to caption model
@@ -50,6 +51,43 @@ class RewardCriterion(nn.Module):
         output = torch.sum(output) / torch.sum(mask)
 
         return output
+
+class SpeakerHingeCriterion(nn.Module):
+    def __init__(self, threshold=0.1):
+        super(SpeakerHingeCriterion, self).__init__()
+        self.threshold = threshold
+
+    def forward(self, pos_gen, neg_gen, pos_label, pos_mask, neg_label, neg_mask):
+        pos_label = pos_label[:, :pos_gen.size(1)]
+        pos_mask = pos_mask[:, :pos_gen.size(1)]
+        neg_label = neg_label[:, :pos_gen.size(1)]
+        neg_mask = neg_mask[:, :pos_gen.size(1)]
+
+        PGPL = pos_gen.gather(2, pos_label.unsqueeze(2)).squeeze(2) * pos_mask
+        PGPL = torch.sum(PGPL, -1) / torch.sum(pos_mask, -1)
+        PGNL = pos_gen.gather(2, neg_label.unsqueeze(2)).squeeze(2) * neg_mask
+        PGNL = torch.sum(PGNL, -1) / torch.sum(neg_mask, -1)
+        NGPL = neg_gen.gather(2, pos_label.unsqueeze(2)).squeeze(2) * pos_mask
+        NGPL = torch.sum(NGPL, -1) / torch.sum(pos_mask, -1)
+        return torch.mean(torch.clamp(self.threshold + PGNL - PGPL, min=0)) * 0.1 + torch.mean(torch.clamp(self.threshold + NGPL - PGPL, min=0))
+
+
+class ListenerHingeCriterion(nn.Module):
+    def __init__(self, threshold=0.1):
+        super(ListenerHingeCriterion, self).__init__()
+        self.threshold = threshold
+
+    def forward(self, pos_img, neg_img, pos_seq, neg_seq):
+        pos_img = F.normalize(pos_img.squeeze(1))
+        neg_img = F.normalize(neg_img.squeeze(1))
+        pos_seq = F.normalize(pos_seq.squeeze(1))
+        neg_seq = F.normalize(neg_seq.squeeze(1))
+        dot = lambda x, y: torch.sum(x * y, -1)
+        PGPL = dot(pos_img, pos_seq)
+        PGNL = dot(pos_img, neg_seq)
+        NGPL = dot(neg_img, pos_seq)
+        return torch.mean(torch.clamp(self.threshold + PGNL - PGPL, min=0)) + torch.mean(torch.clamp(self.threshold + NGPL - PGPL, min=0))
+
 
 class LanguageModelCriterion(nn.Module):
     def __init__(self):
@@ -204,6 +242,5 @@ class ReduceLROnPlateau(object):
 def get_std_opt(model, factor=1, warmup=2000):
     # return NoamOpt(model.tgt_embed[0].d_model, 2, 4000,
     #         torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
-    return NoamOpt(model.model.tgt_embed[0].d_model, factor, warmup,
+    return NoamOpt(model.d_model, factor, warmup,
             torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
-    

@@ -45,7 +45,7 @@ class EncoderDecoder(nn.Module):
         return self.encoder(self.src_embed(src), src_mask)
     
     def decode(self, memory, src_mask, tgt, tgt_mask):
-        return self.decoder(self.tgt_embed(tgt), memory, src_mask, tgt_mask)
+        return self.decoder(self.tgt_embed(tgt), memory, src_mask[:, :, 1].unsqueeze(-1), tgt_mask)
 
 class Generator(nn.Module):
     "Define standard linear + softmax generation step."
@@ -71,7 +71,8 @@ class Encoder(nn.Module):
         "Pass the input (and mask) through each layer in turn."
         for layer in self.layers:
             x = layer(x, mask)
-        return self.norm(x)
+        x = self.norm(x)
+        return (x.sum(dim=1) / mask.sum(dim=2)).unsqueeze(1)
 
 class LayerNorm(nn.Module):
     "Construct a layernorm module (See citation for details)."
@@ -261,7 +262,7 @@ class TransformerModel(AttModel):
         position = PositionalEncoding(d_model, dropout)
         model = EncoderDecoder(
             Encoder(EncoderLayer_2b(d_model, c(attn), c(ff), dropout), N),
-            Decoder(DecoderLayer(d_model, c(attn), c(attn), 
+            Decoder(DecoderLayer(d_model, c(attn), c(attn),
                                  c(ff), dropout), N),
             lambda x:x, # nn.Sequential(Embeddings(d_model, src_vocab), c(position)),
             nn.Sequential(Embeddings(d_model, tgt_vocab), c(position)),
@@ -294,6 +295,8 @@ class TransformerModel(AttModel):
         self.fc_embed = lambda x : x
         delattr(self, 'logit')
         del self.ctx2att
+
+        self.d_model = opt.input_encoding_size
 
         tgt_vocab = self.vocab_size + 1
         self.model = self.make_model(0, tgt_vocab,

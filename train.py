@@ -80,9 +80,11 @@ def train(opt):
     else:
         crit = utils.LanguageModelCriterion()
     rl_crit = utils.RewardCriterion()
+    crit_hinge_speaker = utils.SpeakerHingeCriterion()
+    crit_hinge_listener = utils.ListenerHingeCriterion()
 
     if opt.noamopt:
-        assert opt.caption_model == 'transformer', 'noamopt can only work with transformer'
+        assert opt.caption_model == 'transformer' or opt.caption_model == 'sl', 'noamopt can only work with transformer'
         optimizer = utils.get_std_opt(model, factor=opt.noamopt_factor, warmup=opt.noamopt_warmup)
         optimizer._step = iteration
     elif opt.reduce_on_plateau:
@@ -128,13 +130,22 @@ def train(opt):
         torch.cuda.synchronize()
         start = time.time()
 
-        tmp = [data['fc_feats'], data['att_feats'], data['labels'], data['masks'], data['att_masks']]
+        tmp = [data['fc_feats'], data['att_feats'], data['labels'], data['masks'], data['att_masks'],
+               data['negative_fc_feats'], data['negative_att_feats'], data['negative_labels'], data['negative_masks'], data['negative_att_masks']]
         tmp = [_ if _ is None else torch.from_numpy(_).cuda() for _ in tmp]
-        fc_feats, att_feats, labels, masks, att_masks = tmp
+        fc_feats, att_feats, labels, masks, att_masks, \
+            negative_fc_feats, negative_att_feats, negative_labels, negative_masks, negative_att_masks, = tmp
         
         optimizer.zero_grad()
         if not sc_flag:
-            loss = crit(dp_model(fc_feats, att_feats, labels, att_masks), labels[:,1:], masks[:,1:])
+            img_feat, sent_feat, output = dp_model(fc_feats, att_feats, labels, att_masks)
+            negative_img_feat, _, negative_output = dp_model(negative_fc_feats, negative_att_feats, labels, negative_att_masks)
+            _, negative_sent_feat, _ = dp_model(negative_fc_feats, negative_att_feats, negative_labels, negative_att_masks)
+            loss_speaker = crit(output, labels[:,1:], masks[:,1:])
+            loss_hinge_speaker = crit_hinge_speaker(output, negative_output, labels[:,1:], masks[:,1:], negative_labels[:, 1:], negative_masks[:, 1:])
+            loss_hinge_listener = crit_hinge_listener(img_feat, negative_img_feat, sent_feat, negative_sent_feat)
+            print('Loss0: %.3f, Loss1: %.3f, Loss2: %.3f' % (loss_speaker, loss_hinge_speaker, loss_hinge_listener))
+            loss = loss_speaker + loss_hinge_speaker + loss_hinge_listener
         else:
             gen_result, sample_logprobs = dp_model(fc_feats, att_feats, att_masks, opt={'sample_max':0}, mode='sample')
             reward = get_self_critical_reward(dp_model, fc_feats, att_feats, att_masks, data, gen_result, opt)

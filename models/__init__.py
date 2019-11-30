@@ -14,6 +14,7 @@ from .FCModel import FCModel
 from .OldModel import ShowAttendTellModel, AllImgModel
 from .AttModel import *
 from .TransformerModel import TransformerModel
+from .SpeakerListener import SpeakerListener
 
 def setup(opt):
     
@@ -47,6 +48,8 @@ def setup(opt):
     # Transformer
     elif opt.caption_model == 'transformer':
         model = TransformerModel(opt)
+    elif opt.caption_model == 'sl':
+        model = SpeakerListener(opt)
     else:
         raise Exception("Caption model not supported: {}".format(opt.caption_model))
 
