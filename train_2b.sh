@@ -15,7 +15,7 @@ else
 start_from="--start_from "$ckpt_path
 fi
 
-python train.py --id $id --caption_model transformer \
+python train.py --id $id --caption_model sl \
     --noamopt --noamopt_warmup 20000 --label_smoothing 0.0 \
     --input_json data/refcoco.json --input_label_h5 data/refcoco_label.h5 \
     --input_fc_dir data/cocobu_ref_fc --input_att_dir data/cocobu_ref_att \

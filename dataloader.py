@@ -55,6 +55,21 @@ class DataLoader(data.Dataset):
         self.input_att_dir = self.opt.input_att_dir
         self.input_box_dir = self.opt.input_box_dir
 
+        # REFCOCO
+        self.ann_feats = np.load(self.opt.ref_ann_feats)
+        self.image_feats = np.load(self.opt.ref_image_feats)
+        self.ref_infos = json.load(open(self.opt.ref_infos))
+
+        self.ann2idx = {item['ann_id']: i for i, item in enumerate(self.ref_infos['anns'])}
+        self.img2idx = {item['image_id']: i for i, item in enumerate(self.ref_infos['images'])}
+        self.ref2ann = {item['ref_id']: item['ann_id'] for item in self.ref_infos['refs']}
+        self.ann2ref = {v: k for k, v in self.ref2ann.items()}
+        self.ref2img = {item['ref_id']: item['image_id'] for item in self.ref_infos['refs']}
+        self.img_info = {item['image_id']: item for item in self.ref_infos['images']}
+        self.ref_info = {item['ref_id']: item for item in self.ref_infos['refs']}
+        self.ann_info = {item['ann_id']: item for item in self.ref_infos['anns']}
+        self.ref2infoidx = {item['id']: ix for ix, item in enumerate(self.info['images'])}
+
         # load in the sequence data
         seq_size = self.h5_label_file['labels'].shape
         self.seq_length = seq_size[1]
@@ -135,12 +150,97 @@ class DataLoader(data.Dataset):
             seq = self.h5_label_file['labels'][ixl: ixl + seq_per_img, :self.seq_length]
         return seq
 
-    def get_negative_sample(self, ix):
-        negative_ixs = self.negative_sample_ix[ix]
-        negative_ix = random.choice(negative_ixs)
-        negative_fc = np.load(os.path.join(self.input_fc_dir, str(self.info['images'][ix]['id']) + '.npy'))
-        negative_att = np.load(os.path.join(self.input_att_dir, str(self.info['images'][ix]['id']) + '.npz'))['feat']
-        return negative_ix, negative_fc, negative_att
+    def sample_neg_ids(self, pos_ann_id, seq_per_img, sample_ratio=0.5):
+        neg_ann_ids, neg_ref_ids = [], []
+        st_ref_ids, st_ann_ids, dt_ref_ids, dt_ann_ids = self.fetch_neighbour_ids(pos_ann_id)
+        for k in range(seq_per_img):
+            ### ann
+            if len(st_ann_ids) > 0 and random.random() < sample_ratio:
+                ix = random.randint(0, len(st_ann_ids) - 1)
+                neg_ann_id = st_ann_ids[ix]
+            elif len(dt_ann_ids) > 0:
+                ix = random.randint(0, len(dt_ann_ids) - 1)
+                neg_ann_id = dt_ann_ids[ix]
+            else:
+                ix = random.randint(0, len(self.ann_info) - 1)
+                neg_ann_id = list(self.ann_info.keys())[ix]
+            neg_ann_ids.append(neg_ann_id)
+            ### ref
+            if len(st_ref_ids) > 0 and random.random() < sample_ratio:
+                ix = random.randint(0, len(st_ref_ids) - 1)
+                neg_ref_id = st_ref_ids[ix]
+            elif len(dt_ref_ids) > 0:
+                ix = random.randint(0, len(dt_ref_ids) - 1)
+                neg_ref_id = dt_ref_ids[ix]
+            else:
+                ix = random.randint(0, len(self.ref_info) - 1)
+                neg_ref_id = list(self.ref_info.keys())[ix]
+            infoidx = self.ref2infoidx[neg_ref_id]
+            neg_ref_ids.append(infoidx)
+        return neg_ann_ids, neg_ref_ids
+
+    def fetch_neighbour_ids(self, ref_ann_id):
+        # same image differnt id
+        # same/different category and with/without ref annotation -- 4 combination
+        ref_ann = self.ann_info[ref_ann_id]
+        x, y, w, h = ref_ann['box']
+        rx, ry = x + w / 2, y + h / 2
+
+        def calc_distance_from_target(ann_id):
+            x, y, w, h = self.ann_info[ann_id]['box']
+            ax, ay = x + w / 2, y + h / 2
+            return (rx - ax) ** 2 + (ry - ay) ** 2
+
+        image = self.img_info[ref_ann['image_id']]
+        ann_ids = image['ann_ids']
+        ann_ids = sorted([[ann_id, calc_distance_from_target(ann_id)] for ann_id in ann_ids], key=lambda x: x[1])
+        ann_ids = [ann_id[0] for ann_id in ann_ids]
+        st_ref_ids, st_ann_ids, dt_ref_ids, dt_ann_ids = [], [], [], []
+        for ann_id in ann_ids:
+            if ann_id != ref_ann_id:
+                if self.ann_info[ann_id]['category_id'] == ref_ann['category_id']:
+                    st_ann_ids.append(ann_id)
+                    if ann_id in self.ann2ref:
+                        st_ref_ids.append(self.ann2ref[ann_id])
+                else:
+                    dt_ann_ids.append(ann_id)
+                    if ann_id in self.ann2ref:
+                        dt_ref_ids.append(self.ann2ref[ann_id])
+
+        return st_ref_ids, st_ann_ids, dt_ref_ids, dt_ann_ids
+
+    def fetch_dif_feats(self, ann_id):
+        dif_ann_feats = np.zeros((2048), dtype=np.float32)
+        dif_lfeats = np.zeros((5 * 5), dtype=np.float32)
+        _, st_ann_ids, _, _ = self.fetch_neighbour_ids(ann_id)
+        st_ann_ids = st_ann_ids[:5]
+        if len(st_ann_ids) != 0:
+            cand_ann_feats = self.ann_feats[[self.ann2idx[st_id_] for st_id_ in st_ann_ids]]
+            ref_ann_feat = self.ann_feats[self.ann2idx[ann_id]].reshape(1, -1)
+            dif_ann_feat = np.mean(cand_ann_feats - ref_ann_feat, axis=0)
+            rbox = self.ann_info[ann_id]['box']
+            rcx, rcy, rw, rh = rbox[0] + rbox[2] / 2, rbox[1] + rbox[3] / 2, rbox[2], rbox[3]
+            dif_lfeat = []
+            for st_ann_id in st_ann_ids:
+                cbox = self.ann_info[st_ann_id]['box']
+                cx1, cy1, cw, ch = cbox[0], cbox[1], cbox[2], cbox[3]
+                dif_lfeat.extend(
+                    [(cx1 - rcx) / rw, (cy1 - rcy) / rh, (cx1 + cw - rcx) / rw, (cy1 + ch - rcy) / rh, cw * ch / (rw * rh)])
+            dif_ann_feats = dif_ann_feat
+            dif_lfeats[:len(dif_lfeat)] = dif_lfeat
+        return dif_ann_feats, dif_lfeats
+
+    def fetch_feats(self, ann_id):
+        ann_info = self.ann_info[ann_id]
+        img_id = ann_info['image_id']
+        ann_feats = self.ann_feats[self.ann2idx[ann_id]]
+        ctx_feats = self.image_feats[self.img2idx[img_id]]
+        x, y, w, h = ann_info['box']
+        iw, ih = self.img_info[img_id]['width'], self.img_info[img_id]['height']
+        l_feats = np.array([x / iw, y / ih, (x + w - 1) / iw, (y + h - 1) / ih, w * h / (iw * ih)])
+        df, dlf = self.fetch_dif_feats(ann_id)
+        tmp_att = np.hstack((ctx_feats, ann_feats, l_feats, df, dlf)).reshape((1, -1))
+        return tmp_att
 
     def get_batch(self, split, batch_size=None, seq_per_img=None):
         batch_size = batch_size or self.batch_size
@@ -162,17 +262,27 @@ class DataLoader(data.Dataset):
 
         for i in range(batch_size):
             # fetch image
-            tmp_fc, tmp_att,\
-                ix, tmp_wrapped = self._prefetch_process[split].get()
+            _, _, ix, tmp_wrapped = self._prefetch_process[split].get()
+            ref_id = self.info['images'][ix]['id']
+            ann_id = self.ref2ann[ref_id]
+            img_id = self.ref2img[ref_id]
+
+            tmp_fc = self.image_feats[img_id]
             fc_batch.append(tmp_fc)
+
+            tmp_att = self.fetch_feats(ann_id)
             att_batch.append(tmp_att)
 
             label_batch[i * seq_per_img : (i + 1) * seq_per_img, 1 : self.seq_length + 1] = self.get_captions(ix, seq_per_img)
 
-            negative_ix, negative_fc, negative_att = self.get_negative_sample(ix)
-            negative_fc_batch.append(negative_fc)
-            negative_att_batch.append(negative_att)
-            negative_label_batch[i * seq_per_img : (i + 1) * seq_per_img, 1 : self.seq_length + 1] = self.get_captions(negative_ix, seq_per_img)
+            neg_ann_ids, neg_ref_ids = self.sample_neg_ids(ann_id, seq_per_img)
+            for neg_ann_id in neg_ann_ids:
+                # no use
+                negative_fc_batch.append(tmp_fc)
+                negative_att_batch.append(self.fetch_feats(neg_ann_id))
+            # not ref ids, but ix in self.info['images']
+            for id, neg_ix in enumerate(neg_ref_ids):
+                negative_label_batch[i * seq_per_img + id: i * seq_per_img + id + 1, 1: self.seq_length + 1] = self.get_captions(neg_ix, 1)
 
             if tmp_wrapped:
                 wrapped = True
@@ -190,8 +300,15 @@ class DataLoader(data.Dataset):
         # #sort by att_feat length
         # fc_batch, att_batch, label_batch, gts, infos = \
         #     zip(*sorted(zip(fc_batch, att_batch, np.vsplit(label_batch, batch_size), gts, infos), key=lambda x: len(x[1]), reverse=True))
-        fc_batch, att_batch, negative_fc_batch, negative_att_batch, label_batch, negative_label_batch, gts, infos = \
-            zip(*sorted(zip(fc_batch, att_batch, negative_fc_batch, negative_att_batch, np.vsplit(label_batch, batch_size), np.vsplit(negative_label_batch, batch_size), gts, infos), key=lambda x: 0, reverse=True))
+        max_att_len = max([_.shape[0] for _ in negative_att_batch])
+        negative_att_batch_tmp = np.zeros(
+            [len(att_batch) * seq_per_img, max_att_len, negative_att_batch[0].shape[1]],
+            dtype='float32')
+        for i in range(len(negative_att_batch)):
+            negative_att_batch_tmp[i * seq_per_img:(i + 1) * seq_per_img, :negative_att_batch[i].shape[0]] = negative_att_batch[i]
+
+        fc_batch, att_batch, negative_fc_batch, negative_att_batch_tmp, label_batch, negative_label_batch, gts, infos = \
+            zip(*sorted(zip(fc_batch, att_batch, negative_fc_batch, np.vsplit(negative_att_batch_tmp, batch_size), np.vsplit(label_batch, batch_size), np.vsplit(negative_label_batch, batch_size), gts, infos), key=lambda x: 0, reverse=True))
         data = {}
         data['fc_feats'] = np.stack(reduce(lambda x, y: x + y, [[_] * seq_per_img for _ in fc_batch]))
         # merge att_feats
@@ -204,22 +321,19 @@ class DataLoader(data.Dataset):
         for i in range(len(att_batch)):
             data['att_masks'][i * seq_per_img:(i + 1) * seq_per_img, :att_batch[i].shape[0]] = 1
         # set att_masks to None if attention features have same length
-        if data['att_masks'].sum() == data['att_masks'].size:
-            data['att_masks'] = None
+        # if data['att_masks'].sum() == data['att_masks'].size:
+        #     data['att_masks'] = None
 
         data['negative_fc_feats'] = np.stack(reduce(lambda x, y: x + y, [[_] * seq_per_img for _ in negative_fc_batch]))
         # merge att_feats
-        max_att_len = max([_.shape[0] for _ in negative_att_batch])
-        data['negative_att_feats'] = np.zeros([len(negative_att_batch) * seq_per_img, max_att_len, negative_att_batch[0].shape[1]],
-                                     dtype='float32')
-        for i in range(len(negative_att_batch)):
-            data['negative_att_feats'][i * seq_per_img:(i + 1) * seq_per_img, :negative_att_batch[i].shape[0]] = negative_att_batch[i]
+        # max_att_len = max([_.shape[0] for _ in negative_att_batch])
+        data['negative_att_feats'] = np.vstack(negative_att_batch_tmp)
         data['negative_att_masks'] = np.zeros(data['negative_att_feats'].shape[:2], dtype='float32')
         for i in range(len(negative_att_batch)):
-            data['negative_att_masks'][i * seq_per_img:(i + 1) * seq_per_img, :negative_att_batch[i].shape[0]] = 1
+            data['negative_att_masks'][i, :negative_att_batch[i].shape[0]] = 1
         # set att_masks to None if attention features have same length
-        if data['negative_att_masks'].sum() == data['negative_att_masks'].size:
-            data['negative_att_masks'] = None
+        # if data['negative_att_masks'].sum() == data['negative_att_masks'].size:
+        #     data['negative_att_masks'] = None
 
         data['labels'] = np.vstack(label_batch)
         # generate mask
@@ -247,9 +361,10 @@ class DataLoader(data.Dataset):
         """This function returns a tuple that is further passed to collate_fn
         """
         ix = index #self.split_ix[index]
-        return (np.load(os.path.join(self.input_fc_dir, str(self.info['images'][ix]['id']) + '.npy')),
-                np.load(os.path.join(self.input_att_dir, str(self.info['images'][ix]['id']) + '.npz'))['feat'],
-                ix)
+        return (None, None, ix)
+        # return (np.load(os.path.join(self.input_fc_dir, str(self.info['images'][ix]['id']) + '.npy')),
+        #         np.load(os.path.join(self.input_att_dir, str(self.info['images'][ix]['id']) + '.npz'))['feat'],
+        #         ix)
 
     def __len__(self):
         return len(self.info['images'])

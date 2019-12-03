@@ -45,7 +45,7 @@ class EncoderDecoder(nn.Module):
         return self.encoder(self.src_embed(src), src_mask)
     
     def decode(self, memory, src_mask, tgt, tgt_mask):
-        return self.decoder(self.tgt_embed(tgt), memory, src_mask[:, :, 1].unsqueeze(-1), tgt_mask)
+        return self.decoder(self.tgt_embed(tgt), memory, src_mask, tgt_mask)
 
 class Generator(nn.Module):
     "Define standard linear + softmax generation step."

@@ -46,7 +46,7 @@ def parse_opt():
                     help='the hidden size of the attention MLP; only useful in show_attend_tell; 0 if not using hidden layer')
     parser.add_argument('--fc_feat_size', type=int, default=2048,
                     help='2048 for resnet, 4096 for vgg')
-    parser.add_argument('--att_feat_size', type=int, default=2048,
+    parser.add_argument('--att_feat_size', type=int, default=6174,
                     help='2048 for resnet, 512 for vgg')
     parser.add_argument('--logit_layers', type=int, default=1,
                     help='number of layers in the RNN')
@@ -148,6 +148,11 @@ def parse_opt():
 
     parser.add_argument('--reduce_on_plateau', action='store_true',
                     help='')
+
+    # REFCOCO
+    parser.add_argument('--ref_ann_feats', type=str, default='data/ann_feats.npy')
+    parser.add_argument('--ref_image_feats', type=str, default='data/image_feats.npy')
+    parser.add_argument('--ref_infos', type=str, default='data/data.json')
 
     args = parser.parse_args()
 

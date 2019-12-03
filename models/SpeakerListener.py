@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import misc.utils as utils
 
+import sys
 import copy
 import math
 import numpy as np
@@ -24,12 +25,12 @@ class SpeakerListener(AttModel):
         # d_model = self.input_encoding_size # 512
 
         delattr(self, 'att_embed')
-        self.att_embed = nn.Sequential(*(
-                ((nn.BatchNorm1d(self.att_feat_size),) if self.use_bn else ()) +
-                (nn.Linear(self.att_feat_size, self.input_encoding_size),
-                 nn.ReLU(),
-                 nn.Dropout(self.drop_prob_lm)) +
-                ((nn.BatchNorm1d(self.input_encoding_size),) if self.use_bn == 2 else ())))
+        # self.att_embed = nn.Sequential(*(
+        #         ((nn.BatchNorm1d(self.att_feat_size),) if self.use_bn else ()) +
+        #         (nn.Linear(self.att_feat_size, self.input_encoding_size),
+        #          nn.ReLU(),
+        #          nn.Dropout(self.drop_prob_lm)) +
+        #         ((nn.BatchNorm1d(self.input_encoding_size),) if self.use_bn == 2 else ())))
 
         delattr(self, 'embed')
         self.embed = lambda x: x
@@ -37,21 +38,22 @@ class SpeakerListener(AttModel):
         self.fc_embed = lambda x: x
         delattr(self, 'logit')
         del self.ctx2att
+        c = copy.deepcopy
 
         self.feat_ind = [2048, 2048, 5, 2048, 25]
         self.res_dim = self.opt.res_dim
         self.res6_dim = self.opt.res6_dim
         self.dif_num = self.opt.dif_num
-        self.input_encoding_size = self.opt.res6_dim
+        # self.input_encoding_size = self.opt.res6_dim
         if res6 != None:
-            self.cxt_enc = res6.copy()
-            self.ann_enc = res6.copy()
-            self.dif_ann_enc = res6.copy()
+            self.cxt_enc = c(res6)
+            self.ann_enc = c(res6)
+            self.dif_ann_enc = c(res6)
         else:
             self.cxt_enc = nn.Linear(self.res_dim, self.res6_dim)
             self.ann_enc = nn.Linear(self.res_dim, self.res6_dim)
             self.dif_ann_enc = nn.Linear(self.res_dim, self.res6_dim)
-        self.joint_enc = nn.Linear(res6_dim * 3 + 5 * (self.dif_num + 1), self.input_encoding_size)
+        self.joint_enc = nn.Linear(self.res6_dim * 3 + 5 * (self.dif_num + 1), self.input_encoding_size)
 
         vocab = self.vocab_size + 1
         h = 8
@@ -59,15 +61,21 @@ class SpeakerListener(AttModel):
         d_model = opt.input_encoding_size
         d_ff = opt.rnn_size
         dropout = 0.1
-        c = copy.deepcopy
         attn = MultiHeadedAttention(h, d_model)
         ff = PositionwiseFeedForward(d_model, d_ff, dropout)
         position = PositionalEncoding(d_model, dropout)
+        # self.speaker = EncoderDecoder(
+        #     Encoder(EncoderLayer(d_model, c(attn), c(ff), dropout), N),
+        #     Decoder(DecoderLayer(d_model, c(attn), c(attn),
+        #                          c(ff), dropout), N),
+        #     lambda x: x,  # nn.Sequential(Embeddings(d_model, src_vocab), c(position)),
+        #     nn.Sequential(Embeddings(d_model, vocab), c(position)),
+        #     Generator(d_model, vocab))
         self.speaker = EncoderDecoder(
-            Encoder(EncoderLayer_2b(d_model, c(attn), c(ff), dropout), N),
+            None,
             Decoder(DecoderLayer(d_model, c(attn), c(attn),
                                  c(ff), dropout), N),
-            lambda x: x,  # nn.Sequential(Embeddings(d_model, src_vocab), c(position)),
+            None,
             nn.Sequential(Embeddings(d_model, vocab), c(position)),
             Generator(d_model, vocab))
         self.listener = EncoderDecoder(
@@ -101,18 +109,17 @@ class SpeakerListener(AttModel):
 
     def _prepare_feature_forward(self, att_feats, att_masks=None, seq=None, init_norm=20):
         feats = att_feats
-        cxt = self.cxt_enc(feats[:, :self.feat_ind[0]])
-        ann = self.ann_enc(feats[:, sum(self.feat_ind[:1]):sum(self.feat_ind[:2])])
-        loc = feats[:, sum(self.feat_ind[:2]):sum(self.feat_ind[:3])]
-        diff_ann = self.dif_ann_enc(feats[:, sum(self.feat_ind[:3]):sum(self.feat_ind[:4])])
-        diff_loc = feats[:, sum(self.feat_ind[:4]):]
+        cxt = self.cxt_enc(feats[:, :, :self.feat_ind[0]])
+        ann = self.ann_enc(feats[:, :, sum(self.feat_ind[:1]):sum(self.feat_ind[:2])])
+        loc = feats[:, :, sum(self.feat_ind[:2]):sum(self.feat_ind[:3])]
+        diff_ann = self.dif_ann_enc(feats[:, :, sum(self.feat_ind[:3]):sum(self.feat_ind[:4])])
+        diff_loc = feats[:, :, sum(self.feat_ind[:4]):]
 
         cxt = F.normalize(cxt) * init_norm
         ann = F.normalize(ann) * init_norm
         loc = F.normalize(loc + 1e-15) * init_norm
         diff_ann = F.normalize(diff_ann) * init_norm
         diff_loc = F.normalize(diff_loc + 1e-15) * init_norm
-        # 这里的模型我全部按照他们做visual encoding的方式搭的，尽管我没见过这种中途归一化的方式
 
         J = torch.cat([cxt, ann, loc, diff_ann, diff_loc], 2)
         att_feats = J = F.dropout(self.joint_enc(J), p=0.25) # batch * 1 * input_encoding_size
@@ -142,6 +149,7 @@ class SpeakerListener(AttModel):
         return att_feats, seq_encoder, seq, att_masks, seq_mask_encoder, seq_mask
 
     def _forward(self, fc_feats, att_feats, seq, att_masks=None):
+        sys.stdout.flush()
         #att_feats: batch_size * 1 * (2048 + 2048 + 5 + 2048 + 25)
         #att_masks: batch_size * 1, all the elements are 1
         att_feats, seq_encoder, seq, att_masks, seq_encoder_mask, seq_mask = \
