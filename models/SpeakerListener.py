@@ -115,11 +115,11 @@ class SpeakerListener(AttModel):
         diff_ann = self.dif_ann_enc(feats[:, :, sum(self.feat_ind[:3]):sum(self.feat_ind[:4])])
         diff_loc = feats[:, :, sum(self.feat_ind[:4]):]
 
-        cxt = F.normalize(cxt) * init_norm
-        ann = F.normalize(ann) * init_norm
-        loc = F.normalize(loc + 1e-15) * init_norm
-        diff_ann = F.normalize(diff_ann) * init_norm
-        diff_loc = F.normalize(diff_loc + 1e-15) * init_norm
+        cxt = F.normalize(cxt, dim=2) * init_norm
+        ann = F.normalize(ann, dim=2) * init_norm
+        loc = F.normalize(loc + 1e-15, dim=2) * init_norm
+        diff_ann = F.normalize(diff_ann, dim=2) * init_norm
+        diff_loc = F.normalize(diff_loc + 1e-15, dim=2) * init_norm
 
         J = torch.cat([cxt, ann, loc, diff_ann, diff_loc], 2)
         att_feats = J = F.dropout(self.joint_enc(J), p=0.25) # batch * 1 * input_encoding_size
