@@ -1,5 +1,8 @@
 log/
 data/
 cider/
-coco-caption
+coco-caption/
 **/*.pyc
+screenlog.*
+save_dir/
+checkpoint/

@@ -6,6 +6,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+import torchvision.models as models
+
 import numpy as np
 
 import time
@@ -121,7 +123,7 @@ def train(opt):
                 sc_flag = False
 
             epoch_done = False
-                
+
         start = time.time()
         # Load data from train split (0)
         data = loader.get_batch('train')
@@ -135,7 +137,7 @@ def train(opt):
         tmp = [_ if _ is None else torch.from_numpy(_).cuda() for _ in tmp]
         fc_feats, att_feats, labels, masks, att_masks, \
             negative_fc_feats, negative_att_feats, negative_labels, negative_masks, negative_att_masks, = tmp
-        
+
         optimizer.zero_grad()
         if not sc_flag:
             img_feat, sent_feat, output = dp_model(fc_feats, att_feats, labels, att_masks)

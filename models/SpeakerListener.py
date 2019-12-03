@@ -17,7 +17,7 @@ from .TransformerModel import *
 
 
 class SpeakerListener(AttModel):
-    def __init__(self, opt):
+    def __init__(self, opt, res6=None):
         super(SpeakerListener, self).__init__(opt)
         self.opt = opt
         # self.config = yaml.load(open(opt.config_file))
@@ -37,6 +37,21 @@ class SpeakerListener(AttModel):
         self.fc_embed = lambda x: x
         delattr(self, 'logit')
         del self.ctx2att
+
+        self.feat_ind = [2048, 2048, 5, 2048, 25]
+        self.res_dim = self.opt.res_dim
+        self.res6_dim = self.opt.res6_dim
+        self.dif_num = self.opt.dif_num
+        self.input_encoding_size = self.opt.res6_dim
+        if res6 != None:
+            self.cxt_enc = res6.copy()
+            self.ann_enc = res6.copy()
+            self.dif_ann_enc = res6.copy()
+        else:
+            self.cxt_enc = nn.Linear(self.res_dim, self.res6_dim)
+            self.ann_enc = nn.Linear(self.res_dim, self.res6_dim)
+            self.dif_ann_enc = nn.Linear(self.res_dim, self.res6_dim)
+        self.joint_enc = nn.Linear(res6_dim * 3 + 5 * (self.dif_num + 1), self.input_encoding_size)
 
         vocab = self.vocab_size + 1
         h = 8
@@ -81,10 +96,23 @@ class SpeakerListener(AttModel):
 
         return fc_feats[..., :1], att_feats[..., :1], memory, att_masks
 
-    def _prepare_feature_forward(self, att_feats, att_masks=None, seq=None):
-        att_feats, att_masks = self.clip_att(att_feats, att_masks)
+    def _prepare_feature_forward(self, att_feats, att_masks=None, seq=None, init_norm=20):
+        feats = att_feats
+        cxt = self.cxt_enc(feats[:, :self.feat_ind[0]])
+        ann = self.ann_enc(feats[:, sum(self.feat_ind[:1]):sum(self.feat_ind[:2])])
+        loc = feats[:, sum(self.feat_ind[:2]):sum(self.feat_ind[:3])]
+        diff_ann = self.dif_ann_enc(feats[:, sum(self.feat_ind[:3]):sum(self.feat_ind[:4])])
+        diff_loc = feats[:, sum(self.feat_ind[:4]):]
 
-        att_feats = pack_wrapper(self.att_embed, att_feats, att_masks)
+        cxt = F.normalize(cxt) * init_norm
+        ann = F.normalize(ann) * init_norm
+        loc = F.normalize(loc + 1e-15) * init_norm
+        diff_ann = F.normalize(diff_ann) * init_norm
+        diff_loc = F.normalize(diff_loc + 1e-15) * init_norm
+        # 这里的模型我全部按照他们做visual encoding的方式搭的，尽管我没见过这种中途归一化的方式
+
+        J = torch.cat([cxt, ann, loc, diff_ann, diff_loc], 2)
+        att_feats, J = F.dropout(self.joint_enc(J), ratio=0.25) # batch * 1 * input_encoding_size
 
         if att_masks is None:
             att_masks = att_feats.new_ones(att_feats.shape[:2], dtype=torch.long)
@@ -111,6 +139,8 @@ class SpeakerListener(AttModel):
         return att_feats, seq_encoder, seq, att_masks, seq_mask_encoder, seq_mask
 
     def _forward(self, fc_feats, att_feats, seq, att_masks=None):
+        #att_feats: batch_size * 1 * (2048 + 2048 + 5 + 2048 + 25)
+        #att_masks: batch_size * 1, all the elements are 1
         att_feats, seq_encoder, seq, att_masks, seq_encoder_mask, seq_mask = \
             self._prepare_feature_forward(att_feats, att_masks, seq)
 
