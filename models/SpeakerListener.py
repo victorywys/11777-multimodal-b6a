@@ -92,7 +92,10 @@ class SpeakerListener(AttModel):
     def _prepare_feature(self, fc_feats, att_feats, att_masks):
 
         att_feats, seq_encoder, seq, att_masks, seq_encoder_mask, seq_mask = self._prepare_feature_forward(att_feats, att_masks)
-        memory = self.speaker.encode(att_feats, att_masks)
+        # do not use transformer:
+        memory = att_feats
+        # if using transformer, keep the following line.
+        # memory = self.speaker.encode(att_feats, att_masks)
 
         return fc_feats[..., :1], att_feats[..., :1], memory, att_masks
 
@@ -112,7 +115,7 @@ class SpeakerListener(AttModel):
         # 这里的模型我全部按照他们做visual encoding的方式搭的，尽管我没见过这种中途归一化的方式
 
         J = torch.cat([cxt, ann, loc, diff_ann, diff_loc], 2)
-        att_feats, J = F.dropout(self.joint_enc(J), ratio=0.25) # batch * 1 * input_encoding_size
+        att_feats = J = F.dropout(self.joint_enc(J), p=0.25) # batch * 1 * input_encoding_size
 
         if att_masks is None:
             att_masks = att_feats.new_ones(att_feats.shape[:2], dtype=torch.long)
@@ -144,7 +147,10 @@ class SpeakerListener(AttModel):
         att_feats, seq_encoder, seq, att_masks, seq_encoder_mask, seq_mask = \
             self._prepare_feature_forward(att_feats, att_masks, seq)
 
-        img_feat = self.speaker.encode(att_feats, att_masks)
+        # do not use transformer for only 1 feature
+        img_feat = att_feats
+        # if use transformer, keep the line below:
+        #img_feat = self.speaker.encode(att_feats, att_masks)
         out = self.speaker.decode(img_feat, att_masks, seq, seq_mask)
         outputs = self.speaker.generator(out)
 
