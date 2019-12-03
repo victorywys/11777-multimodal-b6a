@@ -267,7 +267,7 @@ class DataLoader(data.Dataset):
             ann_id = self.ref2ann[ref_id]
             img_id = self.ref2img[ref_id]
 
-            tmp_fc = self.image_feats[img_id]
+            tmp_fc = self.image_feats[self.img2idx[img_id]]
             fc_batch.append(tmp_fc)
 
             tmp_att = self.fetch_feats(ann_id)
