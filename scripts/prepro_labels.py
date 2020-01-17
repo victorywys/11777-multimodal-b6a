@@ -13,13 +13,13 @@ Output: a json file and an hdf5 file
 The hdf5 file contains several fields:
 /images is (N,3,256,256) uint8 array of raw image data in RGB format
 /labels is (M,max_length) uint32 array of encoded labels, zero padded
-/label_start_ix and /label_end_ix are (N,) uint32 arrays of pointers to the 
+/label_start_ix and /label_end_ix are (N,) uint32 arrays of pointers to the
   first and last indices (in range 1..M) of labels for each image
 /label_length stores the length of the sequence for each of the M sequences
 
 The json file has a dict that contains:
 - an 'ix_to_word' field storing the vocab in form {ix:'word'}, where ix is 1-indexed
-- an 'images' field that is a list holding auxiliary information for each image, 
+- an 'images' field that is a list holding auxiliary information for each image,
   such as in particular the 'split' it was assigned to.
 """
 
@@ -152,7 +152,7 @@ def encode_captions(imgs, params, wtoi):
 def main(params):
 
     import sys
-    sys.path.append('/home/gift/777/refer')
+    sys.path.append('/usr0/home/yansenwa/11777/refer')
     from refer import REFER
 
     refer = REFER(params['input_json'], params['dataset'], params['splitBy'])
@@ -206,15 +206,15 @@ if __name__ == "__main__":
 
     # input json
     parser.add_argument('--input_json', required=True, help='input json file to process into hdf5')
-    parser.add_argument('--output_json', default='data.json', help='output json file')
-    parser.add_argument('--output_h5', default='data', help='output h5 file')
+    parser.add_argument('--output_json', default='refcocog.json', help='output json file')
+    parser.add_argument('--output_h5', default='refcocog', help='output h5 file')
     parser.add_argument('--images_root', default='', help='root location in which images are stored, to be prepended to file_path in input json')
 
     # options
-    parser.add_argument('--max_length', default=16, type=int, help='max length of a caption, in number of words. captions longer than this get clipped.')
+    parser.add_argument('--max_length', default=25, type=int, help='max length of a caption, in number of words. captions longer than this get clipped.')
     parser.add_argument('--word_count_threshold', default=5, type=int, help='only words that occur more than this number of times will be put in vocab')
-    parser.add_argument('--dataset', default='refcoco', type=str, help='Dataset name: refcoco / refcocog/ refcoco+/ refclef')
-    parser.add_argument('--splitBy', default='unc', type=str, help='Split by')
+    parser.add_argument('--dataset', default='refcocog', type=str, help='Dataset name: refcoco / refcocog/ refcoco+/ refclef')
+    parser.add_argument('--splitBy', default='google', type=str, help='Split by')
 
     args = parser.parse_args()
     params = vars(args) # convert to ordinary dict

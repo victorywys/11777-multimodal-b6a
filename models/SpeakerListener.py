@@ -57,7 +57,7 @@ class SpeakerListener(AttModel):
 
         vocab = self.vocab_size + 1
         h = 8
-        N = opt.num_layers
+        N = 2
         d_model = opt.input_encoding_size
         d_ff = opt.rnn_size
         dropout = 0.1
@@ -148,7 +148,7 @@ class SpeakerListener(AttModel):
 
         return att_feats, seq_encoder, seq, att_masks, seq_mask_encoder, seq_mask
 
-    def _forward(self, fc_feats, att_feats, seq, att_masks=None):
+    def _forward(self, fc_feats, att_feats, seq, att_masks=None, use_gumbel=False):
         sys.stdout.flush()
         #att_feats: batch_size * 1 * (2048 + 2048 + 5 + 2048 + 25)
         #att_masks: batch_size * 1, all the elements are 1
@@ -160,7 +160,7 @@ class SpeakerListener(AttModel):
         # if use transformer, keep the line below:
         #img_feat = self.speaker.encode(att_feats, att_masks)
         out = self.speaker.decode(img_feat, att_masks, seq, seq_mask)
-        outputs = self.speaker.generator(out)
+        outputs = self.speaker.generator(out, use_gumbel=use_gumbel)
 
         sent_feat = self.listener.encode(seq_encoder, seq_encoder_mask)
         return img_feat, sent_feat, outputs

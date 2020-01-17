@@ -69,6 +69,7 @@ class DataLoader(data.Dataset):
         self.ref_info = {item['ref_id']: item for item in self.ref_infos['refs']}
         self.ann_info = {item['ann_id']: item for item in self.ref_infos['anns']}
         self.ref2infoidx = {item['id']: ix for ix, item in enumerate(self.info['images'])}
+        print(self.ref2infoidx)
 
         # load in the sequence data
         seq_size = self.h5_label_file['labels'].shape

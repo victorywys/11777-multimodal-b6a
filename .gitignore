@@ -6,3 +6,5 @@ coco-caption/
 screenlog.*
 save_dir/
 checkpoint/
+eval_results/
+vis/

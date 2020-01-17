@@ -11,6 +11,16 @@ def parse_opt():
     parser.add_argument('--dif_num', type=int, default=5,
                     help='')
 
+    parser.add_argument('--train_mode', type=str, default="pretrain",
+                    help='')
+    parser.add_argument('--use_discriminator_loss_every', type=int, default=1,
+                    help='')
+    parser.add_argument('--discriminator_from', type=str, default=None,
+                    help='')
+
+    parser.add_argument('--dis_id', type=str, default=None,
+                    help='')
+
     parser.add_argument('--input_json', type=str, default='data/coco.json',
                     help='path to the json file containing additional info and vocab')
     parser.add_argument('--input_fc_dir', type=str, default='data/cocotalk_fc',
@@ -150,9 +160,9 @@ def parse_opt():
                     help='')
 
     # REFCOCO
-    parser.add_argument('--ref_ann_feats', type=str, default='data/ann_feats.npy')
-    parser.add_argument('--ref_image_feats', type=str, default='data/image_feats.npy')
-    parser.add_argument('--ref_infos', type=str, default='data/data.json')
+    parser.add_argument('--ref_ann_feats', type=str, default='/usr0/home/yansenwa/refcocog_google/ann_feats.npy')
+    parser.add_argument('--ref_image_feats', type=str, default='/usr0/home/yansenwa/refcocog_google/image_feats.npy')
+    parser.add_argument('--ref_infos', type=str, default='/usr0/home/yansenwa/refcocog_google/data.json')
 
     args = parser.parse_args()
 

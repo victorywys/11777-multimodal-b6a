@@ -1,29 +1,31 @@
-id=refcoco_2b
+id=refcocog
+dis_id=refcocog_dis
 ckpt_path="log/log_"$id
 if [ ! -d $ckpt_path ]; then
   mkdir $ckpt_path
 fi
 
-scst_path="log/log_scst_"$id
+scst_path="log/log_scst_"$dis_id
 if [ ! -d $scst_path ]; then
   mkdir $scst_path
 fi
 
-if [ ! -f $ckpt_path"/infos_"$id".pkl" ]; then
+if [ ! -f $ckpt_path"/infos_"$dis_id".pkl" ]; then
 start_from=""
 else
 start_from="--start_from "$ckpt_path
 fi
 
-CUDA_VISIBLE_DEVICE=1,2,5
+export CUDA_VISIBLE_DEVICES=3
 
-python2 train.py --id $id --caption_model sl \
-    --noamopt --noamopt_warmup 12000 --label_smoothing 0.0 \
-    --input_json data/refcoco.json --input_label_h5 data/refcoco_label.h5 \
+python2 train.py --id $id --dis_id $dis_id --caption_model sl --train_mode joint\
+    --input_json data/refcocog.json --input_label_h5 data/refcocog_label.h5 \
     --input_fc_dir data/cocobu_ref_fc --input_att_dir data/cocobu_ref_att \
-    --seq_per_img 3 --batch_size 60 --beam_size 1 --num_layers 6 --input_encoding_size 512 --rnn_size 2048 \
-    --learning_rate_decay_start 0 --scheduled_sampling_start 0 --checkpoint_path $ckpt_path \
-    --save_checkpoint_every 2000 --language_eval 1 --val_images_use 5000 --max_epochs 20 --learning_rate 5e-4 | tee $ckpt_path/train.log
+    --seq_per_img 3 --batch_size 100 --beam_size 1 --num_layers 2 --input_encoding_size 512 --rnn_size 2048 \
+    --reduce_on_plateau --learning_rate_decay_start 0 --scheduled_sampling_start 0 --checkpoint_path $ckpt_path \
+    --start_from log/log_refcocog_gen2 --discriminator_from log/log_refcocog_dis\
+    --use_discriminator_loss_every 1\
+    --save_checkpoint_every 1000 --language_eval 1 --val_images_use 5000 --max_epochs 50 --learning_rate 5e-5 | tee $ckpt_path/train.log
 
 #python train.py --id $id --caption_model transformer --reduce_on_plateau \
 #    --input_json data/refcoco.json --input_label_h5 data/refcoco_label.h5 --cached_tokens refcoco-all-idxs \

@@ -1,4 +1,5 @@
-id=refcoco_2b
+id=refcocog_gen2
+dis_id=refcocog_dis
 ckpt_path="log/log_"$id
 if [ ! -d $ckpt_path ]; then
   mkdir $ckpt_path
@@ -15,15 +16,14 @@ else
 start_from="--start_from "$ckpt_path
 fi
 
-CUDA_VISIBLE_DEVICE=1,2,5
+export CUDA_VISIBLE_DEVICES=5
 
-python2 train.py --id $id --caption_model sl \
-    --noamopt --noamopt_warmup 12000 --label_smoothing 0.0 \
-    --input_json data/refcoco.json --input_label_h5 data/refcoco_label.h5 \
+python2 train.py --id $id --dis_id $dis_id --caption_model sl --train_mode pretrain\
+    --input_json data/refcocog.json --input_label_h5 data/refcocog_label.h5 \
     --input_fc_dir data/cocobu_ref_fc --input_att_dir data/cocobu_ref_att \
-    --seq_per_img 3 --batch_size 60 --beam_size 1 --num_layers 6 --input_encoding_size 512 --rnn_size 2048 \
-    --learning_rate_decay_start 0 --scheduled_sampling_start 0 --checkpoint_path $ckpt_path \
-    --save_checkpoint_every 2000 --language_eval 1 --val_images_use 5000 --max_epochs 20 --learning_rate 5e-4 | tee $ckpt_path/train.log
+    --seq_per_img 3 --batch_size 100 --beam_size 1 --num_layers 2 --input_encoding_size 512 --rnn_size 2048 \
+    --noamopt --noamopt_warmup 20000 --label_smoothing 0.0 --learning_rate_decay_start 0 --scheduled_sampling_start 0 --checkpoint_path $ckpt_path \
+    --save_checkpoint_every 2000 --language_eval 1 --val_images_use 5000 --max_epochs 50 --learning_rate 1e-5 | tee $ckpt_path/train.log
 
 #python train.py --id $id --caption_model transformer --reduce_on_plateau \
 #    --input_json data/refcoco.json --input_label_h5 data/refcoco_label.h5 --cached_tokens refcoco-all-idxs \

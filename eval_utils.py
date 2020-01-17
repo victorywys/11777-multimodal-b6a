@@ -18,7 +18,7 @@ import misc.utils as utils
 def language_eval(dataset, preds, model_id, split):
     import sys
     sys.path.append("coco-caption")
-    annFile = 'coco-caption/annotations/refcoco_val.json'
+    annFile = 'coco-caption/annotations/refcocog.json'
     from pycocotools.coco import COCO
     from pycocoevalcap.eval import COCOEvalCap
 
@@ -92,7 +92,7 @@ def eval_split(model, crit, loader, eval_kwargs={}):
 
         # forward the model to also get generated samples for each image
         # Only leave one feature for each image, in case duplicate sample
-        tmp = [data['fc_feats'][np.arange(loader.batch_size) * loader.seq_per_img], 
+        tmp = [data['fc_feats'][np.arange(loader.batch_size) * loader.seq_per_img],
             data['att_feats'][np.arange(loader.batch_size) * loader.seq_per_img],
             data['att_masks'][np.arange(loader.batch_size) * loader.seq_per_img] if data['att_masks'] is not None else None]
         tmp = [torch.from_numpy(_).cuda() if _ is not None else _ for _ in tmp]
@@ -100,7 +100,7 @@ def eval_split(model, crit, loader, eval_kwargs={}):
         # forward the model to also get generated samples for each image
         with torch.no_grad():
             seq = model(fc_feats, att_feats, att_masks, opt=eval_kwargs, mode='sample')[0].data
-        
+
         # Print beam search
         if beam_size > 1 and verbose_beam:
             for i in range(loader.batch_size):

@@ -17,6 +17,7 @@ from .OldModel import ShowAttendTellModel, AllImgModel
 from .AttModel import *
 from .TransformerModel import TransformerModel
 from .SpeakerListener import SpeakerListener
+from .Discriminator import Discriminator
 
 def setup(opt):
 
@@ -54,14 +55,24 @@ def setup(opt):
         resnet152 = models.resnet152(pretrained=True)
         resnet152_last_layer = list(resnet152.children())[-1]
         model = SpeakerListener(opt, res6=resnet152_last_layer)
+    elif opt.caption_model == 'discriminator':
+        resnet152 = models.resnet152(pretrained=True)
+        resnet152_last_layer = list(resnet152.children())[-1]
+        model = Discriminator(opt, res6=resnet152_last_layer)
     else:
         raise Exception("Caption model not supported: {}".format(opt.caption_model))
 
     # check compatibility if training is continued from previously saved model
-    if vars(opt).get('start_from', None) is not None:
-        # check if all necessary files exist
-        assert os.path.isdir(opt.start_from)," %s must be a a path" % opt.start_from
-        assert os.path.isfile(os.path.join(opt.start_from,"infos_"+opt.id+".pkl")),"infos.pkl file does not exist in path %s"%opt.start_from
-        model.load_state_dict(torch.load(os.path.join(opt.start_from, 'model.pth')))
-
+    if opt.caption_model == "discriminator":
+        if vars(opt).get('discriminator_from', None) is not None:
+            assert os.path.isdir(opt.discriminator_from)," %s must be a a path" % opt.discriminator_from
+            model.load_state_dict(torch.load(os.path.join(opt.discriminator_from, 'dis_model-best.pth')))
+            print("loaded previous model for %s from %s" % (opt.caption_model, os.path.join(opt.discriminator_from, 'dis_model-best.pth')))
+    else:
+        if vars(opt).get('start_from', None) is not None:
+            # check if all necessary files exist
+            assert os.path.isdir(opt.start_from)," %s must be a a path" % opt.start_from
+            assert os.path.isfile(os.path.join(opt.start_from,"infos_"+opt.id+"_gen2.pkl")),"infos.pkl file does not exist in path %s"%opt.start_from
+            model.load_state_dict(torch.load(os.path.join(opt.start_from, 'model-best.pth')))
+            print("loaded previous model for %s from %s" % (opt.caption_model, os.path.join(opt.start_from, 'model-best.pth')))
     return model
